@@ -6,12 +6,23 @@ add_executable(${PROJECT_NAME}
     # application 应用层
     project/application/main.c
 
+    # bsp 板级支持层
+    project/bsp/platform/bsp_platform.c
+    project/bsp/platform/bsp_internal_flash.c
+
     # porting 平台移植层
     project/porting/stm32g4/system_stm32g4xx.c
     project/porting/stm32g4/system_clock.c
     project/porting/stm32g4/system_control.c
     project/porting/stm32g4/runtime.c
     project/porting/stm32g4/dwt.c
+    project/porting/internal_flash/internal_flash.c
+    project/porting/pwm_output/pwm_output_stm32.c
+    project/porting/uart/uart_stm32.c
+    project/porting/current_sampling/current_sampling_stm32.c
+    project/porting/adc_regular/bus_voltage_stm32.c
+    project/porting/freertos/freertos_hooks.c
+    project/porting/freertos/freertos_time.c
 
     # 芯片启动（入口，非分层）
     startup_stm32g431xx.s
@@ -26,15 +37,22 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 target_include_directories(${PROJECT_NAME} PRIVATE
     project/application
     project/bsp
+    project/bsp/platform
     project/common
     project/porting
     project/porting/stm32g4
+    project/porting/internal_flash
+    project/porting/pwm_output
+    project/porting/uart
+    project/porting/current_sampling
+    project/porting/adc_regular
     project/middleware/third_party/CMSIS/Include
     project/middleware/third_party/CMSIS/Device/ST/STM32G4xx/Include
     project/middleware/third_party/STM32G4xx_LL_Driver/Inc
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE ${TOOLCHAIN_LINK_LIBRARIES})
+include(cmake/freertos.cmake)
+target_link_libraries(${PROJECT_NAME} PRIVATE freertos_kernel ${TOOLCHAIN_LINK_LIBRARIES})
 
 # 输出文件生成、链接脚本依赖及基础库集中在 cmake 目录。
 include(cmake/firmware.cmake)
