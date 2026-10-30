@@ -1,0 +1,62 @@
+# 平台服务与 FreeRTOS
+
+更新日期：2026-10-31。以当日源码为准。
+
+## BSP_Platform
+
+`bsp_platform.h` 定义 `BSP_PlatformTypedef`（`timeMs`、`delayMs`、`dwtCycles`、`dwtElapsedUs`、`dwtDelayUs`），`bsp_platform.c` 提供只读实例 `BSP_Platform`。
+五个函数指针在编译期静态绑定且非空，运行中不可替换，因此调用侧不再做空指针或重复绑定检查；应用只包含 BSP 头，不包含 porting 头。
+`BSP_Platform_Init()` 只编排时钟与 DWT，透传底层真实硬件错误；低频能力 `ClockHz` / `Reset` / `UniqueId` 保留独立函数。
+
+## DWT 与时间
+
+DWT 只提供原始周期、短时测量与微秒忙等待：不累计系统运行时间、不配置 SysTick、不作为业务时钟。
+32 位周期计数约 25.26 秒回绕，无符号相减支持跨一次回绕；测量跨度必须小于该值。调试暂停与内核睡眠不计入，HSI 频偏影响换算精度，任务抢占计入结果。
+
+`BSP_Platform.timeMs()` 来自 1 kHz FreeRTOS tick，从调度器启动计时，32 位约 49.7 天回绕；是内核运行时间，不是 RTC 日历时间。
+`BSP_Platform.delayMs()` 走 `vTaskDelay`，只允许任务上下文，阻塞时让出 CPU，精度受 tick 相位与调度影响。
+SysTick、PendSV、SVC 由 Cortex-M4F 移植层独占。
+
+## 片内 Flash 服务
+
+最后一页 `0x0801F800`（2048 B）为参数区，程序链接区 126 KB。
+读允许主 Flash 范围；擦除与编程只允许参数页。编程地址和长度须 8 字节对齐，源数据可不对齐。
+实现内部管理静态互斥量、解锁、错误标志、缓存恢复、读回检查与上锁；互斥量忙立即返回 `SYS_ERROR_BUSY`。
+调用约束：只能在调度器启动后的普通任务中调用，电机必须停止；同 bank 擦写暂停取指、临界区屏蔽中断，期间 tick 可能丢失。
+超时不能取消已开始的硬件擦除；编程不自动擦除，失败可能留下部分记录，CRC/版本/掉电恢复由业务设计。
+全 1 双字跳过，不消耗 ECC 编程状态；已编程双字未擦除不能再次编程。启动过程不执行任何 Flash 擦写。
+对象：`bsp/platform/bsp_internal_flash.c` 提供 `BSP_InternalFlash.init / read / erasePage / write`。
+
+## FreeRTOS 配置要点
+
+`project/porting/freertos/FreeRTOSConfig.h`，GCC / ARM_CM4F 移植，硬件浮点：
+
+- 1000 Hz tick、32 位计数、抢占 + 同优先级时间片，优先级 0–6（0 留给空闲任务），最大任务名 16 字节；关闭 tickless。
+- 静态与动态分配同时开启；heap_4 管理独立 16 KB RTOS 堆，仅任务/启动上下文可用，控制中断禁止分配；保留 `pvPortMalloc` 链接入口使堆实际计入 RAM。
+- 堆与链接脚本的 Newlib 堆、C++ `new`/`malloc` 不互通。heap_4 首次分配才初始化空闲链表，首次分配前查询空闲字节可能为 0。
+- 启用互斥量、计数信号量、软件定时器（优先级 1、命令队列 8、静态栈 256 元素即 1024 B）；尚未创建业务定时器。
+- NVIC 四位均为抢占优先级；SysTick/PendSV 编码优先级 15，系统调用门限 5 —— 只有数值 5–15 的 ISR 可调用 `FromISR` API。
+- 开启断言（`FreeRTOS_AssertFailed` 关中断后死循环，保留 `freertosAssertFile`/`freertosAssertLine`）、二级栈溢出检测、分配失败钩子、异常向量安装检查。
+- 开启 trace、栈高地址记录、队列注册表 8、运行时间统计；统计用 DWT 相邻周期累加微秒并保留余数（不重置 DWT、不占定时器），相邻采样须小于一次 DWT 回绕，计数约 71.6 分钟回绕。
+- 未启用 Newlib 任务重入：多任务日志或标准库调用须在各自适配中串行化。
+- 空闲任务、定时器任务内存由 `freertos_hooks.c` 静态提供。
+
+## 任务现状
+
+任务静态创建，控制块与栈为编译期固定存储：
+
+| 任务 | 优先级 | 栈 | 行为 |
+|---|---|---|---|
+| `startup` | 2 | 2048 B | 完成资源初始化后删除自身 |
+| `led` | 1 | 2048 B | 每 10 ms 按整机状态更新红灯亮度后阻塞 |
+| `IDLE` | 0 | 128 元素 | 内核 |
+| `Tmr Svc` | 1 | 256 元素 | 内核，无业务定时器 |
+
+新任务：准备独立 `StaticTask_t` 与 `StackType_t` 数组，在 `main.c` 的 `App_StartupTask` 中按依赖顺序 `xTaskCreateStatic`；声明集中在 `application/task/app_task.h`，入口放 `application/task`。
+普通延时使用 `vTaskDelay` / `xTaskDelayUntil` / `BSP_Platform.delayMs`；只有短硬件时序才用 `BSP_Platform.dwtDelayUs`。
+
+## 上板检查
+
+观察初始化后红灯呼吸；断言触发时读 `freertosAssertFile` / `freertosAssertLine`。
+ELF 中 `SVC_Handler`、`PendSV_Handler`、`SysTick_Handler` 必须是移植层强符号并装入实际向量表。
+编译与向量检查通过不等于硬件已验证。CLion 任务视图用法见 [FreeRTOS CLion 调试](03_freertos_clion_debug.md)。
