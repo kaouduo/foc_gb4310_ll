@@ -5,10 +5,17 @@ project(foc_gb4310_ll LANGUAGES C CXX ASM)
 add_executable(${PROJECT_NAME}
     # application 应用层
     project/application/main.c
+    project/application/state/app_device_state.c
+    project/application/led/app_led.c
+    project/application/task/app_led_task.c
 
     # bsp 板级支持层
     project/bsp/platform/bsp_platform.c
     project/bsp/platform/bsp_internal_flash.c
+    project/bsp/led/bsp_led.c
+
+    # driver 器件驱动层
+    project/driver/led/led_base.c
 
     # porting 平台移植层
     project/porting/stm32g4/system_stm32g4xx.c
@@ -21,6 +28,8 @@ add_executable(${PROJECT_NAME}
     project/porting/uart/uart_stm32.c
     project/porting/current_sampling/current_sampling_stm32.c
     project/porting/adc_regular/bus_voltage_stm32.c
+    project/porting/led/led_gpio.c
+    project/porting/led/led_pwm.c
     project/porting/freertos/freertos_hooks.c
     project/porting/freertos/freertos_time.c
 
@@ -36,9 +45,15 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     project/application
+    project/application/task
+    project/application/led
+    project/application/state
     project/bsp
     project/bsp/platform
+    project/bsp/led
     project/common
+    project/driver
+    project/driver/led
     project/porting
     project/porting/stm32g4
     project/porting/internal_flash
@@ -46,6 +61,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     project/porting/uart
     project/porting/current_sampling
     project/porting/adc_regular
+    project/porting/led
     project/middleware/third_party/CMSIS/Include
     project/middleware/third_party/CMSIS/Device/ST/STM32G4xx/Include
     project/middleware/third_party/STM32G4xx_LL_Driver/Inc
