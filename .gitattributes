@@ -1,0 +1,6 @@
+# 文本统一以 LF 存入仓库并检出，与根 .editorconfig 一致。
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.pdf binary

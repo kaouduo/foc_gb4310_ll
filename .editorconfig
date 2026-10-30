@@ -1,0 +1,9 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+
+[project/middleware/third_party/**]
+charset = unset
+end_of_line = unset

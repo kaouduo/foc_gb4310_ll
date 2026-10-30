@@ -1,0 +1,11 @@
+/build/
+/CMakeUserPresets.json
+/project/middleware/third_party/FreeRTOS-Kernel/
+
+# 本地测试不纳入版本管理。
+/tests/
+
+# IDE 配置及本地构建目录。
+/.idea/
+/cmake-build-*/
+/.thinkrail/

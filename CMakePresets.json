@@ -1,0 +1,26 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "default",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake"
+        },
+        {
+            "name": "REV6-Debug",
+            "inherits": "default",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+        },
+        {
+            "name": "REV6-Release",
+            "inherits": "default",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+        }
+    ],
+    "buildPresets": [
+        { "name": "REV6-Debug", "configurePreset": "REV6-Debug" },
+        { "name": "REV6-Release", "configurePreset": "REV6-Release" }
+    ]
+}
