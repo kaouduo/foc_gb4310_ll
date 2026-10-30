@@ -12,9 +12,11 @@ add_executable(${PROJECT_NAME}
     # bsp 板级支持层
     project/bsp/platform/bsp_platform.c
     project/bsp/platform/bsp_internal_flash.c
+    project/bsp/encoder/bsp_encoder.c
     project/bsp/led/bsp_led.c
 
     # driver 器件驱动层
+    project/driver/mt6826s/mt6826s_drv.c
     project/driver/led/led_base.c
 
     # porting 平台移植层
@@ -25,6 +27,7 @@ add_executable(${PROJECT_NAME}
     project/porting/stm32g4/dwt.c
     project/porting/internal_flash/internal_flash.c
     project/porting/pwm_output/pwm_output_stm32.c
+    project/porting/mt6826s/mt6826s_spi.c
     project/porting/uart/uart_stm32.c
     project/porting/current_sampling/current_sampling_stm32.c
     project/porting/adc_regular/bus_voltage_stm32.c
@@ -48,9 +51,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     project/application/task
     project/application/led
     project/application/state
+    project/bsp/led
     project/bsp
     project/bsp/platform
-    project/bsp/led
     project/common
     project/driver
     project/driver/led
@@ -58,6 +61,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     project/porting/stm32g4
     project/porting/internal_flash
     project/porting/pwm_output
+    project/driver/mt6826s
+    project/porting/mt6826s
+    project/bsp/encoder
     project/porting/uart
     project/porting/current_sampling
     project/porting/adc_regular

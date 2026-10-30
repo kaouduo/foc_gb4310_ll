@@ -3,7 +3,7 @@
  *  @brief  完成平台基础初始化、板级 IO 准备及启动任务编排。
  *  @author kaouduo
  *  @date   2026/10/30
- *  @version V1.2
+ *  @version V1.3
  *
  *  @par 文件所属
  *  application / 启动编排
@@ -13,10 +13,12 @@
  *  日期 | 作者 | 版本 | 说明
  *  --- | --- | --- | ---
  *  2026/10/30 | kaouduo | V1.2 | 将启动编排集中在 main，设备资源就绪后创建业务任务。
+ *  2026/10/30 | kaouduo | V1.3 | 绑定 LED 基类句柄，启动任务初始化具体子类后创建状态指示任务。
  */
 #include "FreeRTOS.h"
 #include "app_device_state.h"
 #include "app_task.h"
+#include "bsp_encoder.h"
 #include "bsp_internal_flash.h"
 #include "bsp_led.h"
 #include "bsp_platform.h"
@@ -69,14 +71,19 @@ static void App_StartupTask(void *argument)
     /* 通过基类执行具体外设初始化；Board_IO_Init 对 LED 只构造绑定对象。 */
     LED_Init(BSP_LED_Red);
     LED_Init(BSP_LED_Green);
+    Sys_Status encoderResult = BSP_Encoder_Init();
+    if (encoderResult != SYS_OK) {
+        App_DeviceState_RaiseFault(SYSTEM_FAULT_STARTUP | SYSTEM_FAULT_ENCODER);
+    }
     Sys_Status flashResult = BSP_InternalFlash.init();
     if (flashResult != SYS_OK) {
         App_DeviceState_RaiseFault(SYSTEM_FAULT_STARTUP | SYSTEM_FAULT_STORAGE);
     }
-    if (flashResult == SYS_OK) {
+    if (encoderResult == SYS_OK && flashResult == SYS_OK) {
         App_DeviceState_Set(SYSTEM_STATE_STANDBY);
     }
-    appStartupResult = flashResult;
+    /* 两个资源都完成初始化，保留首次失败码；故障位同时保存全部失败来源。 */
+    appStartupResult = encoderResult != SYS_OK ? encoderResult : flashResult;
     /* 初始化结果发布后才启动指示任务，初始化期间保持驱动默认熄灭。 */
     (void)xTaskCreateStatic(App_LEDTask, "led", LED_STACK_BYTES / sizeof(StackType_t), NULL, LED_PRIORITY, ledTaskStack,
                             &ledTaskControl);
