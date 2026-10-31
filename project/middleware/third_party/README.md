@@ -7,6 +7,7 @@
 | CMSIS | STM32CubeG4 V1.6.3，来自本机 CubeMX 官方固件包 |
 | STM32G4xx_LL_Driver | STM32CubeG4 V1.6.3，仅保留全部 LL 源码、头文件及许可证 |
 | FreeRTOS-Kernel | 官方稳定标签 V11.3.2，2026-10-16 发布，MIT 许可证 |
+| CherryUSB | 官方稳定标签 v1.6.1，Apache-2.0 许可证；阶段 3 已接通 CDC 设备初始化，实板未验证 |
 
 FreeRTOS 官方源码：[FreeRTOS/FreeRTOS-Kernel](https://github.com/FreeRTOS/FreeRTOS-Kernel/releases/tag/V11.3.2)。
 获取地址：`https://codeload.github.com/FreeRTOS/FreeRTOS-Kernel/zip/refs/tags/V11.3.2`。
@@ -15,3 +16,24 @@ SHA256：`d840bdc153ad08e1fc5c915ea71643b58173fa33129c3b390e4ab1de3bee65f6`。
 FreeRTOS 源码目录已加入 `.gitignore`，缺失时 CMake 自动下载并验证固定归档的哈希。
 配置与源码清单位于 `cmake/freertos.cmake`，修改版本时必须同时更新 URL、哈希与版本检查。
 已有完整源码后可离线构建。首次联网获取发生在 CMake 配置阶段，不在设备运行时发生。
+
+## CherryUSB
+
+官方发布：[CherryUSB v1.6.1](https://github.com/cherry-embedded/CherryUSB/releases/tag/v1.6.1)。
+
+- commit：`c9625ffa773ad10b8824d1b5361bca2ccc1f3d1e`。
+- 获取地址：`https://codeload.github.com/cherry-embedded/CherryUSB/zip/refs/tags/v1.6.1`。
+- 归档 SHA256：`04862e5ffcbacc5747bc1b0fa068d58be1e307761bd2076e78c6ceaeda9f028b`。
+- 源码目录：`project/middleware/third_party/CherryUSB/`，不入库，不修改、不格式化上游内容。
+- 配置和构建：`cmake/cherryusb.cmake`、`project/porting/cherryusb/usb_config.h`。
+- `cmake/cherryusb.sha256` 保存本次构建源码、头文件及许可证的 23 项校验值；已有目录也检查版本和哈希，不静默覆盖错误源码。
+
+只编译 `core/usbd_core.c`、`class/cdc/usbd_cdc_acm.c`、`port/fsdev/usb_dc_fsdev.c`，输出 `cherryusb_device` 静态库。保持完整上游目录用于阅读，但不编译 Host、其他类、示例或 HAL 胶水。阶段 1 仅构建库，阶段 2 接通中断但不启动设备栈；阶段 3 在 BSP 启动时序后注册描述符、调用 usbd_initialize 并开启 USB IRQ。回显与命令任务仍待阶段 4，实板 CDC 枚举尚未核验。
+
+首次 `cmake --preset REV6-Debug` 缺少源码目录时自动获取并校验归档。已有源码后可用 `cmake --preset REV6-Debug -DFETCHCONTENT_FULLY_DISCONNECTED=ON` 验证不获取依赖的配置路径，然后正常构建。恢复自动获取可设该变量为 `OFF`。离线模式下源码缺失明确报错。
+
+错误版本、文件缺失或哈希变化均使配置失败；先保存本地改动、核对清单，不在错误目录上自动重新下载覆盖。升级版本时同步更新 tag、commit、归档哈希和文件清单。
+
+上游 FSDEV 控制器代码保留在第三方目录，虽然直接操作寄存器，也不搬迁至项目 porting。项目使用 `usb_dc_port.c` 的 LL 胶水，不引入 `usb_glue_st.c`。当前配置不打印、保留上游断言、不启用 EP0 线程；PMA 访问值 1 与现有 G4 LL 一致，容量已按 G431 数据手册显式设为 1024 B。
+
+阶段 3 的传输与描述符适配位于 `usb_cdc.c/.h`、`usb_descriptors.c/.h`。v1.6.1 的 SET_CONFIGURATION(0) 不发送取消配置事件，项目在 LP IRQ 尾部同步并关闭数据端点，不修改上游核心。Full Speed 设备不提供高速 qualifier/other-speed 描述符，相关请求由核心按不支持处理。

@@ -1,6 +1,7 @@
 /build/
 /CMakeUserPresets.json
 /project/middleware/third_party/FreeRTOS-Kernel/
+/project/middleware/third_party/CherryUSB/
 
 # 本地测试不纳入版本管理。
 /tests/
