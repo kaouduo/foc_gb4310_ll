@@ -35,6 +35,7 @@
 #define configSUPPORT_DYNAMIC_ALLOCATION 1                    /* 允许从 RTOS 堆动态创建任务和对象。 */
 /* 与参考 HAL 工程一致，heap_4 管理独立的 16 KB RTOS 堆。 */
 #define configTOTAL_HEAP_SIZE (16U * 1024U) /* RTOS 动态堆容量为 16 KB。 */
+#define INCLUDE_xTaskGetSchedulerState 1
 #define configUSE_MUTEXES 1                 /* 启用带优先级继承的互斥量。 */
 #define configUSE_RECURSIVE_MUTEXES 0       /* 关闭递归互斥量。 */
 #define configUSE_COUNTING_SEMAPHORES 1     /* 启用计数信号量。 */

@@ -66,6 +66,7 @@ Sys_Status BSP_USB_CDC_Init(USB_CDC_EventCallback callback, void *context)
 }
 
 bool BSP_USB_CDC_IsConfigured(void) { return USB_CDC_IsConfigured(); }
+bool BSP_USB_CDC_IsTerminalOpen(void) { return USB_CDC_IsTerminalOpen(); }
 Sys_Status BSP_USB_CDC_Read(uint8_t *data, uint32_t capacity, uint32_t *actualLength)
 {
     return USB_CDC_Read(data, capacity, actualLength);

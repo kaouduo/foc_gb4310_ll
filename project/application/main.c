@@ -18,6 +18,7 @@
  */
 #include "FreeRTOS.h"
 #include "app_device_state.h"
+#include "app_log.h"
 #include "app_task.h"
 #include "app_usb_task.h"
 #include "bsp_encoder.h"
@@ -28,6 +29,7 @@
 #include "bus_voltage_stm32.h"
 #include "current_sampling_stm32.h"
 #include "dwt.h"
+#include "elog_port.h"
 #include "pwm_output_stm32.h"
 #include "system_clock.h"
 #include "task.h"
@@ -42,6 +44,9 @@
 #define LED_PRIORITY 1U
 _Static_assert(STARTUP_STACK_BYTES % sizeof(StackType_t) == 0U, "Startup stack alignment");
 _Static_assert(LED_STACK_BYTES % sizeof(StackType_t) == 0U, "System stack alignment");
+
+static const App_LogPlatform logPlatform = {
+        .lock = elog_port_output_lock, .unlock = elog_port_output_unlock, .inISR = Elog_Port_InISR};
 
 static StaticTask_t startupTaskControl;
 static StackType_t startupTaskStack[STARTUP_STACK_BYTES / sizeof(StackType_t)];
@@ -94,11 +99,15 @@ static void App_StartupTask(void *argument)
     LED_Init(BSP_LED_Red);
     LED_Init(BSP_LED_Green);
     Sys_Status encoderResult = BSP_Encoder_Init();
+    LOG_I("boot", "Encoder init status=%d", (int)encoderResult);
     if (encoderResult != SYS_OK) {
+        LOG_E("encoder", "Initialization failed status=%d", (int)encoderResult);
         App_DeviceState_RaiseFault(SYSTEM_FAULT_STARTUP | SYSTEM_FAULT_ENCODER);
     }
     Sys_Status flashResult = BSP_InternalFlash.init();
+    LOG_I("boot", "Flash init status=%d", (int)flashResult);
     if (flashResult != SYS_OK) {
+        LOG_E("flash", "Initialization failed status=%d", (int)flashResult);
         App_DeviceState_RaiseFault(SYSTEM_FAULT_STARTUP | SYSTEM_FAULT_STORAGE);
     }
     usbTaskHandle = xTaskCreateStatic(App_USBTask, "usb", USB_STACK_BYTES / sizeof(StackType_t), NULL, USB_PRIORITY,
@@ -106,6 +115,7 @@ static void App_StartupTask(void *argument)
     App_USBOutput_Init(usbTaskHandle);
     Sys_Status usbResult = BSP_USB_CDC_Init(App_USBEvent, NULL);
     if (usbResult == SYS_OK) {
+        LOG_I("usb", "CDC initialized");
         (void)xTaskNotify(usbTaskHandle, APP_USB_TASK_START, eSetBits);
     } else {
         App_USBOutput_Stop();
@@ -119,6 +129,8 @@ static void App_StartupTask(void *argument)
     }
     /* 保留首次失败码；故障位同时保存全部失败来源。 */
     appStartupResult = encoderResult != SYS_OK ? encoderResult : (flashResult != SYS_OK ? flashResult : usbResult);
+    LOG_I("system", "Startup status=%d", (int)appStartupResult);
+    LOG_D("system", "Debug logging enabled");
     /* 初始化结果发布后才启动指示任务，初始化期间保持驱动默认熄灭。 */
     (void)xTaskCreateStatic(App_LEDTask, "led", LED_STACK_BYTES / sizeof(StackType_t), NULL, LED_PRIORITY, ledTaskStack,
                             &ledTaskControl);
@@ -142,7 +154,14 @@ int main(void)
         App_DeviceState_RaiseFault(SYSTEM_FAULT_STARTUP);
         FreeRTOS_AssertFailed(__FILE__, __LINE__);
     }
+    Elog_Port_Bind(App_USBOutput_LogWrite, BSP_Platform.timeMs);
+    if (!App_Log_Init(&logPlatform)) {
+        App_DeviceState_RaiseFault(SYSTEM_FAULT_STARTUP | SYSTEM_FAULT_INTERNAL);
+        FreeRTOS_AssertFailed(__FILE__, __LINE__);
+    }
+    LOG_I("boot", "Clock and DWT initialized");
     Board_IO_Init();
+    LOG_I("boot", "LL board IO initialized");
     appStartupResult = SYS_ERROR_NOT_READY;
     (void)xTaskCreateStatic(App_StartupTask, "startup", STARTUP_STACK_BYTES / sizeof(StackType_t), NULL,
                             STARTUP_PRIORITY, startupTaskStack, &startupTaskControl);

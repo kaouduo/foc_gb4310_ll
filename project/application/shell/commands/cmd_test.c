@@ -5,6 +5,7 @@
  * @date 2026/10/31
  */
 #include <string.h>
+#include "app_log.h"
 #include "bsp_encoder.h"
 #include "csh.h"
 
@@ -21,6 +22,7 @@ static int Test(int argc, char **argv)
         csh_printf(shell, "ERR enc status=%d\r\n", (int)status);
         return -1;
     }
+    LOG_D("encoder", "raw=%u status=0x%02X", (unsigned)sample.angleRaw, (unsigned)sample.status);
     uint32_t angle = ((uint32_t)sample.angleRaw * 36000U + MT6826S_COUNTS_PER_TURN / 2U) / MT6826S_COUNTS_PER_TURN;
     csh_printf(shell, "ENC raw=%u/%u angle_deg=%lu.%02lu status=0x%02X\r\n", (unsigned)sample.angleRaw,
                (unsigned)MT6826S_COUNTS_PER_TURN, (unsigned long)(angle / 100U), (unsigned long)(angle % 100U),

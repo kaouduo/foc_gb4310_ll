@@ -295,7 +295,7 @@ void App_USBTask(void *argument)
             shellOpen = false;
             displayInvalid = false;
         }
-        if (!BSP_USB_CDC_IsConfigured() || (!shellOpen && txPending)) {
+        if (!BSP_USB_CDC_IsTerminalOpen() || (!shellOpen && txPending)) {
             if (shellOpen) {
                 uint32_t irqMask = QueueLock();
                 DiscardLogs();

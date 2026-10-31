@@ -50,6 +50,8 @@ Sys_Status BSP_USB_CDC_Init(USB_CDC_EventCallback callback, void *context);
  *  @note   初始化后在任务中调用；不是检测 USB 供电或主机串口打开状态。
  */
 bool BSP_USB_CDC_IsConfigured(void);
+/** @brief CDC 可传输且终端 DTR 打开，或已收到 OUT 数据；任务中查询。 */
+bool BSP_USB_CDC_IsTerminalOpen(void);
 
 /**
  *  @brief  非阻塞读取 CDC 已接收的数据。

@@ -29,6 +29,7 @@
 
 typedef struct {
     volatile bool configured;
+    volatile bool terminalOpen;
     volatile bool suspended;
     volatile bool fault;
     volatile bool rxReady;
@@ -85,6 +86,8 @@ static void ReceiveComplete(uint8_t busid, uint8_t ep, uint32_t nbytes)
         }
         return;
     }
+    /* 对不切换 DTR 的终端，实际 OUT 数据也视为连接就绪。 */
+    state.terminalOpen = true;
     state.rxOffset = 0U;
     state.rxLength = nbytes;
     state.rxReady = true;
@@ -269,4 +272,22 @@ void usbd_cdc_acm_get_line_coding(uint8_t busid, uint8_t intf, struct cdc_line_c
     (void)busid;
     (void)intf;
     memcpy(coding, &lineCoding, sizeof(lineCoding));
+}
+
+/* 类请求来自 USB IRQ；只发布状态，不在这里等待或发送。 */
+void usbd_cdc_acm_set_dtr(uint8_t busid, uint8_t intf, bool dtr)
+{
+    if (busid != CDC_BUS || intf != 0U) {
+        return;
+    }
+    state.terminalOpen = dtr;
+    eventCallback(USB_CDC_EVENT_STATE, eventContext);
+}
+
+bool USB_CDC_IsTerminalOpen(void)
+{
+    taskENTER_CRITICAL();
+    bool ready = TransferStatus() == SYS_OK && state.terminalOpen;
+    taskEXIT_CRITICAL();
+    return ready;
 }

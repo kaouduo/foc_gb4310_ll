@@ -50,6 +50,7 @@ SysTick、PendSV、SVC 由 Cortex-M4F 移植层独占。
 | 任务 | 优先级 | 栈 | 行为 |
 |---|---|---|---|
 | `startup` | 2 | 2048 B | 完成资源初始化后删除自身 |
+| `usb` | 2 | 2048 B | 等待 START，统一处理 CDC、Shell、日志和平台动作 |
 | `led` | 1 | 2048 B | 每 10 ms 按整机状态更新红灯亮度后阻塞 |
 | `IDLE` | 0 | 128 元素 | 内核 |
 | `Tmr Svc` | 1 | 256 元素 | 内核，无业务定时器 |
@@ -62,3 +63,20 @@ SysTick、PendSV、SVC 由 Cortex-M4F 移植层独占。
 观察初始化后红灯呼吸；断言触发时读 `freertosAssertFile` / `freertosAssertLine`。
 ELF 中 `SVC_Handler`、`PendSV_Handler`、`SysTick_Handler` 必须是移植层强符号并装入实际向量表。
 编译与向量检查通过不等于硬件已验证。CLion 任务视图用法见 [FreeRTOS CLion 调试](03_freertos_clion_debug.md)。
+
+
+## Shell / 日志配置及实测
+
+main 在时钟/DWT 就绪后绑定输出/时间回调，以 App_LogPlatform 注入锁、解锁、ISR 检测能力，初始化 EasyLogger、记录基础和 LL IO 就绪，再创建 startup。USB 任务创建后只绑定日志队列，不清启动记录；CDC 成功后发送 START。终端就绪依据 DTR 或实际 OUT 数据，首次提示符成功前保留缓存。
+
+一把静态 FreeRTOS 互斥量保护格式化和配置，库内重复加锁关闭。INCLUDE_xTaskGetSchedulerState=1；调度前不等待锁。消费者绑定前只有 main/启动任务生产，不调用调度前队列临界区；绑定后短临界区复制并通知，不等待 CDC。普通输出 100 ms，平台动作确认最多 200 ms。
+
+三轮从静态栈底部连续 0xA5 实测的最小未使用字节：
+
+| 任务 | Debug 第一轮 | Release 第二轮 | Debug 第三轮 |
+|---|---:|---:|---:|
+| startup | 1260 B | 1280 B | 1260 B |
+| usb | 856 B | 1020 B | 816 B |
+| led | 1852 B | 1848 B | 1852 B |
+
+满足本阶段 256 B 目标，仍各保留 2048 B 静态任务栈。未进行长时间压力和 FOC 实时性测试；有界拥塞采用启动前预置满队列，实际日志执行拒绝/统计，不能称为长期多生产者压力验证。方法与调试限制见 11_shell_log_validation.md。

@@ -33,6 +33,8 @@ Sys_Status USB_CDC_Init(const USB_Descriptors_Config *config, uintptr_t register
                         void *context);
 /** @brief 任务中查询已配置、未挂起且传输无错误的状态。 */
 bool USB_CDC_IsConfigured(void);
+/** @brief 已配置且 DTR 打开或收到实际 OUT 数据；不改变读写的非阻塞契约。 */
+bool USB_CDC_IsTerminalOpen(void);
 /**
  *  @brief  非阻塞取走待接收字节。
  *  @param  data 可写 capacity 字节的缓冲。

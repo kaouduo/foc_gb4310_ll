@@ -62,6 +62,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     project/application
     project/application/task
     project/application/shell
+    project/application/log
     project/application/led
     project/application/state
     project/bsp/led
@@ -99,7 +100,12 @@ set_source_files_properties(${CHERRYSH_SOURCE_DIR}/builtin/help.c PROPERTIES
 )
 target_sources(${PROJECT_NAME} PRIVATE ${CHERRYSH_SOURCE_DIR}/builtin/help.c)
 # BSP 在启动任务完成断开时序和描述符注册后启动设备栈。
-target_link_libraries(${PROJECT_NAME} PRIVATE freertos_kernel cherryusb_device cherrysh ${TOOLCHAIN_LINK_LIBRARIES})
+target_sources(${PROJECT_NAME} PRIVATE
+    project/application/log/app_log.c
+    project/porting/easylogger/elog_port.c
+    $<$<CONFIG:Debug>:${CMAKE_CURRENT_SOURCE_DIR}/project/application/shell/commands/cmd_log.c>
+)
+target_link_libraries(${PROJECT_NAME} PRIVATE freertos_kernel cherryusb_device cherrysh easylogger ${TOOLCHAIN_LINK_LIBRARIES})
 
 # 输出文件生成、链接脚本依赖及基础库集中在 cmake 目录。
 include(cmake/firmware.cmake)

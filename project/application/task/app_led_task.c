@@ -18,6 +18,7 @@
 #include "FreeRTOS.h"
 #include "app_device_state.h"
 #include "app_led.h"
+#include "app_log.h"
 #include "app_task.h"
 #include "bsp_led.h"
 #include "task.h"
@@ -39,6 +40,13 @@ void App_LEDTask(void *argument)
         TickType_t now = xTaskGetTickCount();
         if (state.state != previous.state) {
             epoch = now;
+        }
+        if (state.state != previous.state || state.faults != previous.faults) {
+            if (state.faults != 0U) {
+                LOG_E("system", "state=%u faults=0x%08lX", (unsigned)state.state, (unsigned long)state.faults);
+            } else {
+                LOG_I("system", "state=%u", (unsigned)state.state);
+            }
             previous = state;
         }
         uint32_t elapsedMs = (uint32_t)((uint64_t)(TickType_t)(now - epoch) * 1000U / configTICK_RATE_HZ);
