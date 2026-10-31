@@ -6,7 +6,9 @@
 
 `bsp_platform.h` 定义 `BSP_PlatformTypedef`（`timeMs`、`delayMs`、`dwtCycles`、`dwtElapsedUs`、`dwtDelayUs`），`bsp_platform.c` 提供只读实例 `BSP_Platform`。
 五个函数指针在编译期静态绑定且非空，运行中不可替换，因此调用侧不再做空指针或重复绑定检查；应用只包含 BSP 头，不包含 porting 头。
-`BSP_Platform_Init()` 只编排时钟与 DWT，透传底层真实硬件错误；低频能力 `ClockHz` / `Reset` / `UniqueId` 保留独立函数。
+系统初始化由 `main` 直接顺序调用 `System_Clock_Init()`、`DWT_Init()`，保留硬件错误及启动故障处理，删除组合接口 `BSP_Platform_Init()`。低频能力 `ClockHz` / `Reset` / `UniqueId` / `EnterDFU` 保留 BSP 独立函数。
+
+阶段 4 新增静态 USB 任务：栈 1024 B、优先级 2；初始化前创建通知目标，任务等待 START 通知后才访问 CDC。EnterDFU 从任务中停止 CDC，复用 BSP_USB_CDC_Prepare 的 200 ms 控制器复位和 300 ms 数据线拉低，再由 porting 清理时钟/中断，以独立汇编切 MSP 跳转 ROM。当前控制业务未启动；未来调用前须停止电机/采样。实测栈水位及完整 DFU 下载验收待确认。
 
 ## DWT 与时间
 

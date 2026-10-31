@@ -24,3 +24,7 @@
 ## 离线检查边界
 
 `tests/rtos_debug_check.gdb` 只验证 `detect()` + `get_config()`（类型、符号、配置标志），**不验证任务枚举**；离线通过 ≠ 板上任务视图已确认。实际显示仍需真实调试会话：打断点、让目标停在任务已创建的代码段后查看。
+
+## J-Link 持久会话
+
+CLion 2026.2 的 Debug Profiles → SEGGER J-Link → Debugger 启用 Persistent session（持久会话），复用服务器连接，减少反复启动的开销。用户确认当前配置下下载速度改善、CDC 正常识别。J-Link 服务器仍被 IDE 使用时，外部诊断工具不得同时争用探针。

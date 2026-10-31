@@ -11,6 +11,8 @@
 5. [接口与编码约定](07_interface_rules.md)：防御检查边界、C/C++ 混合、提交规范。
 6. [FreeRTOS CLion 调试](03_freertos_clion_debug.md)：RTOS 任务视图为空的原因与断点位置。
 7. [提交记录](01_commit_logs.md)：实际提交标题与内容。
+8. [CherryUSB 实施计划](08_cherryusb_plan.md)：阶段门禁、文本协议、启动时序和带职责注释的最终目录。
+9. [USB 基线与验收](09_usb_validation.md)：实际构建结果、硬件待确认项与分阶段核验记录。
 
 `Docs` 根目录不再放专题文档，技术细节统一收在本目录。
 `tests/` 仅保留本地，不入库。此记录不是实时状态源，继续开发前应重新检查源码和 Git 状态。
