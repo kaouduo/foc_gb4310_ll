@@ -36,7 +36,7 @@
 /* 栈配置以字节填写，传给 FreeRTOS 时换算为 StackType_t 元素数。 */
 #define STARTUP_STACK_BYTES 2048U
 #define LED_STACK_BYTES 2048U
-#define USB_STACK_BYTES 1024U
+#define USB_STACK_BYTES 2048U
 #define USB_PRIORITY 2U
 #define STARTUP_PRIORITY 2U
 #define LED_PRIORITY 1U

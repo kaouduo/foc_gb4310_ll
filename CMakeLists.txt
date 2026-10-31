@@ -9,7 +9,10 @@ add_executable(${PROJECT_NAME}
     project/application/led/app_led.c
     project/application/task/app_led_task.c
     project/application/task/app_usb_task.c
-    project/application/usb/app_usb_console.c
+    project/application/shell/app_shell.c
+    project/application/shell/commands/cmd_console.c
+    project/application/shell/commands/cmd_system.c
+    project/application/shell/commands/cmd_test.c
 
     # bsp 板级支持层
     project/bsp/platform/bsp_platform.c
@@ -58,7 +61,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 target_include_directories(${PROJECT_NAME} PRIVATE
     project/application
     project/application/task
-    project/application/usb
+    project/application/shell
     project/application/led
     project/application/state
     project/bsp/led
@@ -86,10 +89,17 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 include(cmake/freertos.cmake)
 include(cmake/cherryusb.cmake)
+# 获取并校验固定依赖，固件在下方链接核心与本工程适配。
 include(cmake/cherrysh.cmake)
 include(cmake/easylogger.cmake)
+# 上游帮助只编译函数，由项目命令检查参数后调用，避免重复注册。
+set_source_files_properties(${CHERRYSH_SOURCE_DIR}/builtin/help.c PROPERTIES
+    COMPILE_DEFINITIONS CONFIG_CSH_SYMTAB=0
+    COMPILE_OPTIONS -Wno-sign-compare
+)
+target_sources(${PROJECT_NAME} PRIVATE ${CHERRYSH_SOURCE_DIR}/builtin/help.c)
 # BSP 在启动任务完成断开时序和描述符注册后启动设备栈。
-target_link_libraries(${PROJECT_NAME} PRIVATE freertos_kernel cherryusb_device ${TOOLCHAIN_LINK_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} PRIVATE freertos_kernel cherryusb_device cherrysh ${TOOLCHAIN_LINK_LIBRARIES})
 
 # 输出文件生成、链接脚本依赖及基础库集中在 cmake 目录。
 include(cmake/firmware.cmake)

@@ -15,8 +15,8 @@
 #include "app_usb_task.h"
 #include <string.h>
 #include "FreeRTOS.h"
+#include "app_shell.h"
 #include "app_task.h"
-#include "app_usb_console.h"
 #include "bsp_platform.h"
 #include "bsp_usb_cdc.h"
 #include "task.h"
@@ -208,7 +208,9 @@ static void SendLog(void)
     }
     uint32_t completed;
     uint32_t started = BSP_Platform.timeMs();
-    Sys_Status status = SendBytes(outputSession, logQueue + start, first, OUTPUT_TIMEOUT_MS, &completed);
+    bool displayReady = App_Shell_BeforeLog();
+    Sys_Status status = displayReady ? SendBytes(outputSession, logQueue + start, first, OUTPUT_TIMEOUT_MS, &completed)
+                                     : SYS_ERROR_IO;
     if (status == SYS_OK && first != length) {
         uint32_t elapsed = BSP_Platform.timeMs() - started;
         status = elapsed < OUTPUT_TIMEOUT_MS
@@ -225,17 +227,38 @@ static void SendLog(void)
         displayInvalid = true;
     }
     QueueUnlock(irqMask);
+    if (status == SYS_OK) {
+        App_Shell_AfterLog();
+        if (App_Shell_OutputFailed()) {
+            displayInvalid = true;
+        }
+    }
 }
 
-static App_USBConsole console;
-static bool SendResponse(uint32_t session, App_USBAction action)
+static uint16_t ShellWrite(const void *data, uint16_t length)
 {
     uint32_t completed;
-    if (action != APP_USB_ACTION_NONE) {
-        App_USBOutput_Stop();
+    (void)App_USBOutput_Write(data, length, &completed);
+    return (uint16_t)completed;
+}
+
+static void ExecuteAction(App_USBAction action)
+{
+    uint32_t accepted = BSP_Platform.timeMs();
+    App_USBOutput_Stop();
+    const char *response = action == APP_USB_ACTION_REBOOT ? "OK reboot\r\n" : "OK dfu\r\n";
+    uint32_t completed;
+    bool sent = SendBytes(outputSession, (const uint8_t *)response, (uint32_t)strlen(response), ACTION_TIMEOUT_MS,
+                          &completed) == SYS_OK;
+    uint32_t elapsed = BSP_Platform.timeMs() - accepted;
+    if (!sent && elapsed < ACTION_TIMEOUT_MS) {
+        (void)BSP_Platform.delayMs(ACTION_TIMEOUT_MS - elapsed);
     }
-    return SendBytes(session, console.response, console.responseLength,
-                     action != APP_USB_ACTION_NONE ? ACTION_TIMEOUT_MS : OUTPUT_TIMEOUT_MS, &completed) == SYS_OK;
+    if (action == APP_USB_ACTION_REBOOT) {
+        BSP_Platform_Reset();
+    } else {
+        BSP_Platform_EnterDFU();
+    }
 }
 
 void App_USBTask(void *argument)
@@ -248,82 +271,87 @@ void App_USBTask(void *argument)
     uint32_t session = BSP_USB_CDC_SessionId();
     outputSession = session;
     uint32_t length = 0U, offset = 0U;
-    App_USBConsole_Reset(&console);
+    bool shellOpen = false;
     for (;;) {
-        if (displayInvalid) {
-            uint32_t locked = QueueLock();
-            DiscardLogs();
-            QueueUnlock(locked);
-            App_USBConsole_Reset(&console);
-            length = offset = 0U;
-            displayInvalid = false;
-        }
         uint32_t current = BSP_USB_CDC_SessionId();
         if (current != session) {
-            App_USBConsole_Reset(&console);
-            length = offset = 0U;
-            session = outputSession = current;
-            txPending = false;
-            uint32_t locked = QueueLock();
+            uint32_t irqMask = QueueLock();
             if (sessionEstablished) {
                 DiscardLogs();
             }
-            QueueUnlock(locked);
+            QueueUnlock(irqMask);
+            length = offset = 0U;
+            session = outputSession = current;
+            txPending = false;
+            shellOpen = false;
         }
-        if (BSP_USB_CDC_IsConfigured()) {
+        if (displayInvalid) {
+            uint32_t irqMask = QueueLock();
+            if (sessionEstablished) {
+                DiscardLogs();
+            }
+            QueueUnlock(irqMask);
+            length = offset = 0U;
+            shellOpen = false;
+            displayInvalid = false;
+        }
+        if (!BSP_USB_CDC_IsConfigured() || (!shellOpen && txPending)) {
+            if (shellOpen) {
+                uint32_t irqMask = QueueLock();
+                DiscardLogs();
+                QueueUnlock(irqMask);
+                shellOpen = false;
+                length = offset = 0U;
+            }
+            (void)WaitEvents(portMAX_DELAY);
+            continue;
+        }
+        if (!shellOpen) {
+            if (sessionEstablished) {
+                uint32_t irqMask = QueueLock();
+                DiscardLogs();
+                QueueUnlock(irqMask);
+            }
+            Sys_Status status = App_Shell_Open(ShellWrite);
+            if (status != SYS_OK) {
+                /* 固定库配置错误属于初始化失败，输出错误等待下一次事件恢复。 */
+                (void)WaitEvents(pdMS_TO_TICKS(1U));
+                continue;
+            }
+            shellOpen = true;
             sessionEstablished = true;
         }
         if (offset == length) {
-            taskENTER_CRITICAL();
+            uint32_t irqMask = QueueLock();
             if (BSP_USB_CDC_SessionId() == session) {
                 (void)BSP_USB_CDC_Read(input, sizeof(input), &length);
             } else {
                 length = 0U;
             }
-            taskEXIT_CRITICAL();
+            QueueUnlock(irqMask);
             offset = 0U;
         }
         bool consumedInput = false;
-        taskENTER_CRITICAL();
-        if (BSP_USB_CDC_SessionId() != session) {
-            App_USBConsole_Reset(&console);
-            length = offset = 0U;
-            session = outputSession = BSP_USB_CDC_SessionId();
-            txPending = false;
-        } else if (offset < length) {
-            if (App_USBConsole_Feed(&console, input[offset], BSP_Platform.timeMs())) {
-                ++offset;
-                consumedInput = true;
-            }
-        } else {
-            App_USBConsole_Poll(&console, BSP_Platform.timeMs());
+        if (BSP_USB_CDC_SessionId() == session && offset < length) {
+            /* 命令可能等待输出，禁止在临界区调用 Shell。 */
+            App_Shell_Feed(input[offset++]);
+            consumedInput = true;
         }
-        taskEXIT_CRITICAL();
-        if (console.responseLength != 0U) {
-            App_USBAction action = console.action;
-            uint32_t accepted = BSP_Platform.timeMs();
-            bool sent = SendResponse(session, action);
-            if (action != APP_USB_ACTION_NONE) {
-                uint32_t elapsed = BSP_Platform.timeMs() - accepted;
-                if (!sent && elapsed < 200U) {
-                    (void)BSP_Platform.delayMs(200U - elapsed);
-                }
-                if (action == APP_USB_ACTION_REBOOT) {
-                    BSP_Platform_Reset();
-                } else {
-                    BSP_Platform_EnterDFU();
-                }
-            }
-            if (sent) {
-                App_USBConsole_Consumed(&console);
-            } else {
-                App_USBConsole_Reset(&console);
-                length = offset = 0U;
-            }
-        } else if (LogsPending() && BSP_USB_CDC_IsConfigured()) {
+        if (BSP_USB_CDC_SessionId() != session) {
+            continue;
+        }
+        App_USBAction action = App_Shell_PendingAction();
+        if (action != APP_USB_ACTION_NONE) {
+            ExecuteAction(action);
+        }
+        if (App_Shell_OutputFailed()) {
+            displayInvalid = true;
+            continue;
+        }
+        if (LogsPending() && BSP_USB_CDC_IsConfigured()) {
             SendLog();
         } else if (offset == length && !consumedInput) {
-            (void)xTaskNotifyWait(0U, UINT32_MAX, &events, console.crPending ? pdMS_TO_TICKS(1U) : portMAX_DELAY);
+            (void)WaitEvents(portMAX_DELAY);
         }
     }
 }

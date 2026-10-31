@@ -32,7 +32,7 @@ extern "C" {
  */
 void App_LEDTask(void *argument);
 
-/** @brief 等待启动通知后处理 CDC 文本；单任务独占收发，栈静态分配 1024 B。 */
+/** @brief 等待启动通知后处理 CDC Shell；单任务独占收发，栈静态分配 2048 B。 */
 void App_USBTask(void *argument);
 
 #ifdef __cplusplus
