@@ -1,6 +1,6 @@
 /**
  *  @file   bsp_platform.c
- *  @brief  静态绑定平台常用能力，提供组合初始化和低频平台操作。
+ *  @brief  静态绑定平台常用能力，提供常用能力绑定和低频平台操作。
  *  @author kaouduo
  *  @date   2026/10/30
  *  @version V1.2
@@ -16,9 +16,10 @@
  */
 
 #include "bsp_platform.h"
+#include "bsp_usb_cdc.h"
 #include "dwt.h"
 #include "freertos_time.h"
-#include "system_clock.h"
+#include "system_bootloader.h"
 #include "system_control.h"
 
 /* 类型在编译期核对，直接绑定底层实现，避免同签名函数的逐项转发。 */
@@ -29,21 +30,6 @@ const BSP_PlatformTypedef BSP_Platform = {
         .dwtElapsedUs = DWT_ElapsedUs,
         .dwtDelayUs = DWT_DelayUs,
 };
-
-/**
- *  @brief  初始化系统主频和 DWT 测量。
- *  @param  无。
- *  @return SYS_OK 表示资源均初始化；其他负值透传底层具体错误。
- *  @note   复位后、模块 IO 和调度器启动前调用一次；失败后停止启动，成功也不启动任务或 Flash 擦写。
- */
-Sys_Status BSP_Platform_Init(void)
-{
-    Sys_Status result = System_Clock_Init();
-    if (result == SYS_OK) {
-        result = DWT_Init();
-    }
-    return result;
-}
 
 /**
  *  @brief  读取内核 HCLK 的软件频率值。
@@ -68,3 +54,10 @@ void BSP_Platform_Reset(void) { System_Reset(); }
  *  @note   可在任务或启动阶段使用；调用者保证三个元素的缓冲区有效，不改变硬件配置。
  */
 Sys_Status BSP_Platform_UniqueId(uint32_t words[3]) { return System_UniqueId(words); }
+
+void BSP_Platform_EnterDFU(void)
+{
+    BSP_USB_CDC_Deinit();
+    BSP_USB_CDC_Prepare();
+    System_Bootloader_Enter();
+}

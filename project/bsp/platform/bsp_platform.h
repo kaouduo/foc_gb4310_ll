@@ -1,6 +1,6 @@
 /**
  *  @file   bsp_platform.h
- *  @brief  静态绑定平台常用能力，提供组合初始化和低频平台操作。
+ *  @brief  静态绑定平台常用能力，提供常用能力绑定和低频平台操作。
  *  @author kaouduo
  *  @date   2026/10/30
  *  @version V1.2
@@ -37,17 +37,9 @@ typedef struct {
 
 /**
  * @brief 平台能力的只读板级实例。
- * @note 所有函数指针均已静态绑定且非空；使用前完成 BSP_Platform_Init。
+ * @note 所有函数指针均已静态绑定且非空；使用前由 main 完成系统时钟与 DWT 初始化。
  */
 extern const BSP_PlatformTypedef BSP_Platform;
-
-/**
- *  @brief  初始化系统主频和 DWT 测量。
- *  @param  无。
- *  @return SYS_OK 表示资源均初始化；其他负值透传底层具体错误。
- *  @note   复位后、模块 IO 和调度器启动前调用一次；失败后停止启动，成功也不启动任务或 Flash 擦写。
- */
-Sys_Status BSP_Platform_Init(void);
 
 /**
  *  @brief  读取内核 HCLK 的软件频率值。
@@ -64,6 +56,15 @@ uint32_t BSP_Platform_ClockHz(void);
  *  @note   调用前停止电机并按需保存参数；不自动写 Flash，当前任务和调度器均不会继续运行。
  */
 void BSP_Platform_Reset(void);
+
+/**
+ *  @brief  断开 CDC 并进入 G431 出厂 ROM Bootloader，允许 USB DFU 下载。
+ *  @param  无。
+ *  @return 不返回；交接时钟等待失败则软件复位。
+ *  @note   任务上下文调用；调用方已停止电机/采样且完成参数保存，CDC 已初始化。
+ *          停止 CDC 后复用 BSP 的 200 ms 控制器复位和 300 ms 数据线拉低；不写 Flash 或选项字节。
+ */
+void BSP_Platform_EnterDFU(void);
 
 /**
  *  @brief  读取芯片 96 位唯一标识。

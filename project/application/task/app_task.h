@@ -17,6 +17,8 @@
 #ifndef APP_TASK_H
 #define APP_TASK_H
 
+#define APP_USB_TASK_START (1UL << 16)
+
 /* 对外保持 C 链接，允许 C++ 业务直接包含并调用。 */
 #ifdef __cplusplus
 extern "C" {
@@ -29,6 +31,9 @@ extern "C" {
  *  @note   由 FreeRTOS 任务上下文调用；每 10 ms 更新硬件 PWM 占空比，其余时间阻塞，不执行 FOC 控制。
  */
 void App_LEDTask(void *argument);
+
+/** @brief 等待启动通知后处理 CDC 文本；单任务独占收发，栈静态分配 1024 B。 */
+void App_USBTask(void *argument);
 
 #ifdef __cplusplus
 }

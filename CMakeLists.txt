@@ -8,6 +8,8 @@ add_executable(${PROJECT_NAME}
     project/application/state/app_device_state.c
     project/application/led/app_led.c
     project/application/task/app_led_task.c
+    project/application/task/app_usb_task.c
+    project/application/usb/app_usb_console.c
 
     # bsp 板级支持层
     project/bsp/platform/bsp_platform.c
@@ -24,6 +26,8 @@ add_executable(${PROJECT_NAME}
     project/porting/stm32g4/system_stm32g4xx.c
     project/porting/stm32g4/system_clock.c
     project/porting/stm32g4/system_control.c
+    project/porting/stm32g4/system_bootloader.c
+    project/porting/stm32g4/system_bootloader_jump.S
     project/porting/stm32g4/runtime.c
     project/porting/stm32g4/dwt.c
     project/porting/internal_flash/internal_flash.c
@@ -54,6 +58,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 target_include_directories(${PROJECT_NAME} PRIVATE
     project/application
     project/application/task
+    project/application/usb
     project/application/led
     project/application/state
     project/bsp/led
