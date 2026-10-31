@@ -2,6 +2,8 @@
 /CMakeUserPresets.json
 /project/middleware/third_party/FreeRTOS-Kernel/
 /project/middleware/third_party/CherryUSB/
+/project/middleware/third_party/CherrySH/
+/project/middleware/third_party/EasyLogger/
 
 # 本地测试不纳入版本管理。
 /tests/

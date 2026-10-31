@@ -90,6 +90,16 @@ SECTIONS
     KEEP (*(.init))
     KEEP (*(.fini))
 
+    /* CherrySH command and variable tables; empty until shell integration. */
+    . = ALIGN(4);
+    __fsymtab_start = .;
+    KEEP(*(FSymTab))
+    __fsymtab_end = .;
+    . = ALIGN(4);
+    __vsymtab_start = .;
+    KEEP(*(VSymTab))
+    __vsymtab_end = .;
+
     . = ALIGN(4);
     _etext = .;        /* define a global symbols at end of code */
   } >FLASH

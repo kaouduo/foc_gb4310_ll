@@ -86,6 +86,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 include(cmake/freertos.cmake)
 include(cmake/cherryusb.cmake)
+include(cmake/cherrysh.cmake)
+include(cmake/easylogger.cmake)
 # BSP 在启动任务完成断开时序和描述符注册后启动设备栈。
 target_link_libraries(${PROJECT_NAME} PRIVATE freertos_kernel cherryusb_device ${TOOLCHAIN_LINK_LIBRARIES})
 

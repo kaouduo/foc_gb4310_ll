@@ -1,0 +1,34 @@
+/**
+ * @file csh_config.h
+ * @brief CherrySH 单实例、非阻塞及静态缓冲配置。
+ * @author kaouduo
+ * @date 2026/10/31
+ */
+#ifndef CSH_CONFIG_H
+#define CSH_CONFIG_H
+
+#define CONFIG_CSH_DEBUG 0
+#define CONFIG_CSH_USAGE_MSG 1
+#define CONFIG_CSH_HELP_MSG 1
+#define CONFIG_CSH_HISTORY 1
+#define CONFIG_CSH_COMPLETION 1
+#define CONFIG_CSH_MAX_COMPLETION 16
+#define CONFIG_CSH_DFTCOL 160
+#define CONFIG_CSH_PROMPTEDIT 1
+#define CONFIG_CSH_XTERM 0
+#define CONFIG_CSH_NEWLINE "\r\n"
+#define CONFIG_CSH_NOBLOCK 1
+#define CONFIG_CSH_MAXLEN_PATH 32
+#define CONFIG_CSH_MAXSEG_PATH 8
+#define CONFIG_CSH_MAX_USER 1
+#define CONFIG_CSH_MAX_ARG 8
+#define CONFIG_CSH_LNBUFF_STATIC 1
+#define CONFIG_CSH_MULTI_THREAD 0
+#define CONFIG_CSH_SIGNAL_HANDLER 0
+#define CONFIG_CSH_USER_CALLBACK 1
+#ifndef CONFIG_CSH_SYMTAB
+#define CONFIG_CSH_SYMTAB 1
+#endif
+#define CONFIG_CSH_PRINT_BUFFER_SIZE 256
+
+#endif /* CSH_CONFIG_H */
