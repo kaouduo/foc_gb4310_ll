@@ -71,3 +71,5 @@ application/log/app_log 提供 LOG_E/W/I/D 门面，main 在创建启动任务�
 S3 首连修正：BSP 新增 IsTerminalOpen 状态查询，底层使用 DTR 或实际 OUT 数据判断；USB 任务在首次提示符完成前保留启动缓存。非阻塞 Read/Write 与端点封装保持原契约。
 
 S4 最终资源：Debug Flash 82596 B、RAM 30960 B；Release Flash 42156 B、RAM 30912 B。三轮短时实板检查完成。上文 USB 54764/26824/27904 B 是 Shell/日志接入前的历史基线，当前实测见 11_shell_log_validation.md。
+
+当前追加资源修正：startup 动态创建，移除 2152 B 永久静态存储；Debug Flash 82812 B / RAM 28808 B，Release Flash 42256 B / RAM 28760 B。USB、LED 和日志锁保持静态，16 KB RTOS 堆未改。新版未烧录，前述三轮为改动前实板结果。

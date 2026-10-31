@@ -174,7 +174,7 @@ foc_gb4310_ll/
 │  └─ [+/S0–S4] 11_shell_log_validation.md  # 基线、检查、三轮、目录对照
 └─ project/
    ├─ application/
-   │  ├─ [M/S1–S4] main.c                  # 调度前日志→启动任务→资源→CDC
+   │  ├─ [M/S1–S4] main.c                  # 调度前日志→动态启动任务→资源→CDC
    │  ├─ state/
    │  │  └─ [M/S0] app_device_state.c       # C23 原子对象直接静态初始化
    │  ├─ task/
@@ -295,3 +295,10 @@ Debug / Release / Debug 三轮实板串口主检查分别 31 / 24 / 31 项，均
 S4 仅同步 02/04/05/README/10/11 文档，生产代码未再修改。累计 42 个交付新增/修改/删除文件均列入最终目录；用户原有 03_freertos_clion_debug.md 修改不属于本次交付，未改动。本地测试忽略，无 Git 提交或推送。
 
 最终目标运行正常 Debug，默认 DEBUG、颜色开、正常启动 dropped=0；COM11 释放、测试 J-Link 服务器关闭，未改用户 IDE 断点。等待用户最终评估。
+
+追加修正：一次性 startup 改为动态创建，移除 main.c 内静态栈和 TCB，增加创建失败处理。Debug/Release 构建及启动主机检查通过，尚未烧录该版本；此前 S4 三轮为修正前版本，不作为本次动态回收的实板证据。最终目录没有新增路径，堆大小、USB/LED 静态分配不变。
+
+
+## 本轮 Git 提交整理（2026-10-31）
+
+按用户要求整理为六个逻辑提交：固定依赖、C23/C++23、USB 输出管理、CherrySH 系统命令、EasyLogger 启动日志与终端控制、startup 动态创建。首连修正与中文帮助/补全并入 Shell/日志功能，不单独提交验收记录，文档随实现提交。每个暂存阶段均在独立导出目录完成 Debug/Release 构建；startup 动态版本的主机检查此前通过，尚未上板。仅本地提交，未推送；用户原有 03_freertos_clion_debug.md 修改留在工作区。

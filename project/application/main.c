@@ -3,7 +3,7 @@
  *  @brief  完成平台基础初始化、板级 IO 准备及启动任务编排。
  *  @author kaouduo
  *  @date   2026/10/30
- *  @version V1.4
+ *  @version V1.5
  *
  *  @par 文件所属
  *  application / 启动编排
@@ -12,6 +12,7 @@
  *
  *  日期 | 作者 | 版本 | 说明
  *  --- | --- | --- | ---
+ *  2026/10/31 | kaouduo | V1.5 | 一次性启动任务动态创建，自删除后由空闲任务回收资源。
  *  2026/10/30 | kaouduo | V1.2 | 将启动编排集中在 main，设备资源就绪后创建业务任务。
  *  2026/10/31 | kaouduo | V1.4 | 启动 CDC 设备并保留 USB 初始化故障与中断事件。
  *  2026/10/30 | kaouduo | V1.3 | 绑定 LED 基类句柄，启动任务初始化具体子类后创建状态指示任务。
@@ -48,8 +49,6 @@ _Static_assert(LED_STACK_BYTES % sizeof(StackType_t) == 0U, "System stack alignm
 static const App_LogPlatform logPlatform = {
         .lock = elog_port_output_lock, .unlock = elog_port_output_unlock, .inISR = Elog_Port_InISR};
 
-static StaticTask_t startupTaskControl;
-static StackType_t startupTaskStack[STARTUP_STACK_BYTES / sizeof(StackType_t)];
 static StaticTask_t usbTaskControl;
 static StackType_t usbTaskStack[USB_STACK_BYTES / sizeof(StackType_t)];
 static TaskHandle_t usbTaskHandle;
@@ -163,8 +162,13 @@ int main(void)
     Board_IO_Init();
     LOG_I("boot", "LL board IO initialized");
     appStartupResult = SYS_ERROR_NOT_READY;
-    (void)xTaskCreateStatic(App_StartupTask, "startup", STARTUP_STACK_BYTES / sizeof(StackType_t), NULL,
-                            STARTUP_PRIORITY, startupTaskStack, &startupTaskControl);
+    /* 一次性启动任务从 RTOS 堆分配，自删除后由空闲任务回收栈和控制块。 */
+    if (xTaskCreate(App_StartupTask, "startup", STARTUP_STACK_BYTES / sizeof(StackType_t), NULL, STARTUP_PRIORITY,
+                    NULL) != pdPASS) {
+        App_DeviceState_RaiseFault(SYSTEM_FAULT_STARTUP | SYSTEM_FAULT_INTERNAL);
+        appStartupResult = SYS_ERROR_IO;
+        FreeRTOS_AssertFailed(__FILE__, __LINE__);
+    }
     vTaskStartScheduler();
     App_DeviceState_RaiseFault(SYSTEM_FAULT_INTERNAL);
     appStartupResult = SYS_ERROR_IO;

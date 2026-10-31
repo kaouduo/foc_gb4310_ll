@@ -296,3 +296,19 @@ GDB load 只下载 ELF 段；ROM DFU 使用 STM32CubeProgrammer USB1 下载同�
 Debug Flash 82596 B / RAM 30960 B，Release Flash 42156 B / RAM 30912 B；S4 无生产代码资源变化。累计 42 个交付文件已核对最终目录，排除用户原有 03_freertos_clion_debug.md 修改。依赖提交与哈希仍由 CMake 清单固定，第三方源码未改。
 
 清理了拥塞种子并普通复位，目标最终运行正常 Debug。`final-sanity.txt` 确认正常启动及 `level=debug color=on emitted=7 filtered=0 truncated=0 dropped=0`。COM11 已关闭释放，代理创建的 J-Link server PID 25280 已停止；CLion 最终 sessions=[]，未改用户断点。没有 Git 提交或推送，停止并等待用户最终评估。
+
+
+## startup 动态创建修正（2026-10-31，当前源码）
+
+用户指出一次性启动任务不应长期占用静态栈。main.c 改为 xTaskCreate（2048 B、优先级 2、无需返回句柄），移除 startupTaskStack / startupTaskControl；创建失败设置故障并停机，不启动调度器。任务结束仍自删除，由 FreeRTOS 空闲任务的 prvCheckTasksWaitingTermination/prvDeleteTCB 回收动态栈与控制块。
+
+实际执行 python tests/check_shell_log_stage3.py 全部通过，其中启动主机替身明确检查 startup 动态创建、USB/LED 不改静态、正确栈深和优先级，并新增动态创建失败不启动调度器的路径；原资源失败和启动顺序回归仍通过。Debug/Release 链接成功，nm 确认 xTaskCreate 被链接、startupTaskStack/startupTaskControl 消失。16 KB ucHeap 保持不变。
+
+Debug Flash 82812 B、RAM 28808 B（87.92%）；Release Flash 42256 B、RAM 28760 B（87.77%）。两者 RAM 比之前减少 2152 B（2048 B 栈 + 104 B 控制块）。动态任务临时占用既有 RTOS 堆，空闲任务回收后可重新分配。
+
+本次未烧录/复位或打开调试器；S4 三轮结果属于此前静态 startup 版本，不能作为本次动态回收实测。旧 S4 本地脚本通过 startupTaskStack 导出启动栈的步骤仅适用于当时版本；后续动态 startup 需在自删除前读取 TCB/水位，删除后检查堆回收，不能再读取已移除的静态符号。尚未缩小堆或其他任务栈，未提交/推送。
+
+
+## 本轮 Git 提交整理（2026-10-31）
+
+按用户要求整理为六个逻辑提交：固定依赖、C23/C++23、USB 输出管理、CherrySH 系统命令、EasyLogger 启动日志与终端控制、startup 动态创建。首连修正与中文帮助/补全并入 Shell/日志功能，不单独提交验收记录，文档随实现提交。每个暂存阶段均在独立导出目录完成 Debug/Release 构建；startup 动态版本的主机检查此前通过，尚未上板。仅本地提交，未推送；用户原有 03_freertos_clion_debug.md 修改留在工作区。

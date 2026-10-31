@@ -61,3 +61,10 @@ CherrySH root 免密码，支持 help/clear/reboot/dfu/system uid/time/test enc�
 Debug 默认 DEBUG，含中文 log 帮助与二三级补全；Release 默认 INFO，不编译 log 命令及 LOG_D。未启用 ISR 日志、模块过滤、多后端和 Flash 日志。
 
 S4 已完成 Debug → Release → Debug 三轮短时实板检查；详见 10_shell_log_plan.md / 11_shell_log_validation.md。最后 2 KB 参数页哈希一致。Debug Flash 82596 B、RAM 30960 B；Release 42156 B、30912 B。实测最低剩余栈 startup 1260 B、USB 816 B、LED 1848 B。最终正常 Debug、默认 DEBUG/颜色开、dropped=0，串口释放，测试服务器关闭。未提交或推送，等待用户最终评估。
+
+当前追加修正：startup 已改为 xTaskCreate 动态创建、自删除后由空闲任务回收，移除静态栈/控制块；USB/LED 保持静态。Debug RAM 28808 B，Release 28760 B，堆仍 16 KB。主机启动路径与 Debug/Release 构建通过，尚未烧录此修正版；先前三轮实板属于修正前版本。
+
+
+## 本轮 Git 提交整理（2026-10-31）
+
+按用户要求整理为六个逻辑提交：固定依赖、C23/C++23、USB 输出管理、CherrySH 系统命令、EasyLogger 启动日志与终端控制、startup 动态创建。首连修正与中文帮助/补全并入 Shell/日志功能，不单独提交验收记录，文档随实现提交。每个暂存阶段均在独立导出目录完成 Debug/Release 构建；startup 动态版本的主机检查此前通过，尚未上板。仅本地提交，未推送；用户原有 03_freertos_clion_debug.md 修改留在工作区。
