@@ -22,7 +22,7 @@
 #define FAULT_SHIFT 8U
 _Static_assert(ATOMIC_INT_LOCK_FREE == 2, "System state requires lock-free word atomics");
 _Static_assert(sizeof(unsigned int) == sizeof(uint32_t), "System state requires 32-bit unsigned int");
-static atomic_uint stateWord = ATOMIC_VAR_INIT(SYSTEM_STATE_INITIALIZING);
+static atomic_uint stateWord = SYSTEM_STATE_INITIALIZING;
 
 /**
  *  @brief  发布驱动板的持续运行状态。

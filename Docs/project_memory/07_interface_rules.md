@@ -19,7 +19,7 @@ ISR 或关中断上下文调用任务阻塞接口属于调用契约错误，由�
 - `common` 只放 C++ 能直接使用的类型/枚举/宏；业务不需要包含带 C11 原子的 porting 私有结构。
 - 新增公共头：依赖头放 `extern "C"` 块**外**，函数与实例声明放块内。
 - C++ 业务直接包含 `app_device_state.h`、`bsp_encoder.h`、`bsp_led.h`、`bsp_platform.h` 等，调用方不再自行包 `extern "C"`。
-- 现有 `.c` 保持 C11，不改用 C++ 编译；`main` 保持 C。新增 `.cpp` 直接加入 CMake 固件源列表。
+- 现有 `.c` 按 C23 编译，不改用 C++ 编译；`main` 保持 C，`.cpp` 按 C++23 编译。新增 `.cpp` 直接加入 CMake 固件源列表。统一配置位于 cmake/gcc-arm-none-eabi.cmake，关闭语言扩展并要求所选标准。
 - C 接口不使用类、引用、模板或 STL 类型；跨边界用指针、枚举、普通结构。
 - C++ 实现对外 C 接口时先包含声明头以继承 C 链接；类的非静态成员不能直接当 C 回调，用 context + 静态适配函数。
 - 标准库线程与完整动态运行时尚未适配；FreeRTOS 堆不接管 `new`/`malloc`。

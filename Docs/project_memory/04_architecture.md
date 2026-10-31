@@ -34,7 +34,7 @@ STM32G431CBU6，内部 HSI 16 MHz 经 PLL（M=4、N=85、R=2）到 **170 MHz**�
 | 三相主输出 TIM1 | PA8 / PA9 / PA10 |
 | TIM1 互补输出 | PB13 / PB14 / PB15 |
 | 编码器 SPI1 | PA5 SCK、PA6 MISO、PA7 MOSI，PC4 软件片选 |
-| 串口 USART3 | PC10 TX、PC11 RX |
+| 串口 USART3 | PC10 TX、PC23 RX |
 | 电流采样 | PA2 → ADC1、PA4 → ADC2 |
 | 母线电压 | PB11 → ADC1 |
 | 红灯 | PB6，TIM4_CH1 AF2 PWM，低电平亮 |
@@ -51,7 +51,7 @@ Flash 128 KB，`0x0801F800` 起 2 KB 为参数区，代码链接区 126 KB；RAM
 
 ## 构建
 
-`CMakePresets.json` 提供 `REV6-Debug`（`-O0 -g3`）与 `REV6-Release`（`-Os -g0`）；工具链参数集中在 `cmake/gcc-arm-none-eabi.cmake`（Cortex-M4 Thumb、硬浮点 ABI、C11/C++17）。
+`CMakePresets.json` 提供 `REV6-Debug`（`-O0 -g3`）与 `REV6-Release`（`-Os -g0`）；工具链参数集中在 `cmake/gcc-arm-none-eabi.cmake`（Cortex-M4 Thumb、硬浮点 ABI、C23/C++23）。
 C++ 禁用异常、RTTI、线程安全局部静态初始化——这不表示已适配完整标准库动态运行时。
 `cmake/firmware.cmake` 负责链接脚本依赖、hex/bin 输出与尺寸打印；`cmake/freertos.cmake` 固定 FreeRTOS 版本、URL、SHA256 并链接 heap_4。
 FreeRTOS 内核源码不入库：首次配置缺目录时自动下载并校验，之后可离线构建。
