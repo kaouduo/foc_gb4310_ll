@@ -16,6 +16,7 @@
 #ifndef USB_CDC_TYPES_H
 #define USB_CDC_TYPES_H
 #include <stdint.h>
+
 /** @brief CDC 中断通知位，可组合；状态通知后由任务查询最新连接状态。 */
 typedef enum {
     USB_CDC_EVENT_RX_READY = 1U << 0, /*!< 接收数据等待任务取走。 */
@@ -23,6 +24,8 @@ typedef enum {
     USB_CDC_EVENT_STATE = 1U << 2,    /*!< 配置、复位、挂起或恢复发生变化。 */
     USB_CDC_EVENT_ERROR = 1U << 3     /*!< 传输提交失败，等待主机重新配置。 */
 } USB_CDC_Event;
+
 /** @brief IRQ 上下文回调；只允许记录事件和合规的 FromISR 操作，不阻塞。 */
 typedef void (*USB_CDC_EventCallback)(uint32_t events, void *context);
+
 #endif

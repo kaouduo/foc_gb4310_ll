@@ -19,6 +19,7 @@
 #include "FreeRTOS.h"
 #include "app_device_state.h"
 #include "app_task.h"
+#include "app_usb_task.h"
 #include "bsp_encoder.h"
 #include "bsp_internal_flash.h"
 #include "bsp_led.h"
@@ -102,10 +103,12 @@ static void App_StartupTask(void *argument)
     }
     usbTaskHandle = xTaskCreateStatic(App_USBTask, "usb", USB_STACK_BYTES / sizeof(StackType_t), NULL, USB_PRIORITY,
                                       usbTaskStack, &usbTaskControl);
+    App_USBOutput_Init(usbTaskHandle);
     Sys_Status usbResult = BSP_USB_CDC_Init(App_USBEvent, NULL);
     if (usbResult == SYS_OK) {
         (void)xTaskNotify(usbTaskHandle, APP_USB_TASK_START, eSetBits);
     } else {
+        App_USBOutput_Stop();
         vTaskDelete(usbTaskHandle);
     }
     if (usbResult != SYS_OK) {
