@@ -14,6 +14,7 @@ add_executable(${PROJECT_NAME}
     project/bsp/platform/bsp_internal_flash.c
     project/bsp/encoder/bsp_encoder.c
     project/bsp/led/bsp_led.c
+    project/bsp/usb/bsp_usb_cdc.c
 
     # driver 器件驱动层
     project/driver/mt6826s/mt6826s_drv.c
@@ -35,6 +36,10 @@ add_executable(${PROJECT_NAME}
     project/porting/led/led_pwm.c
     project/porting/freertos/freertos_hooks.c
     project/porting/freertos/freertos_time.c
+    project/porting/cherryusb/usb_io.c
+    project/porting/cherryusb/usb_dc_port.c
+    project/porting/cherryusb/usb_cdc.c
+    project/porting/cherryusb/usb_descriptors.c
 
     # 芯片启动（入口，非分层）
     startup_stm32g431xx.s
@@ -52,6 +57,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     project/application/led
     project/application/state
     project/bsp/led
+    project/bsp/usb
     project/bsp
     project/bsp/platform
     project/common
@@ -74,7 +80,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 include(cmake/freertos.cmake)
-target_link_libraries(${PROJECT_NAME} PRIVATE freertos_kernel ${TOOLCHAIN_LINK_LIBRARIES})
+include(cmake/cherryusb.cmake)
+# BSP 在启动任务完成断开时序和描述符注册后启动设备栈。
+target_link_libraries(${PROJECT_NAME} PRIVATE freertos_kernel cherryusb_device ${TOOLCHAIN_LINK_LIBRARIES})
 
 # 输出文件生成、链接脚本依赖及基础库集中在 cmake 目录。
 include(cmake/firmware.cmake)

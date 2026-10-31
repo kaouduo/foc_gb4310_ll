@@ -1,9 +1,9 @@
 /**
  *  @file   system_clock.c
- *  @brief  配置基于内部 HSI 的 170 MHz 系统时钟。
+ *  @brief  配置内部 HSI 的 170 MHz 主频及 USB 独立时钟。
  *  @author kaouduo
  *  @date   2026/10/30
- *  @version V1.0
+ *  @version V1.1
  *
  *  @par 文件所属
  *  porting / stm32g4
@@ -13,10 +13,12 @@
  *  日期 | 作者 | 版本 | 说明
  *  --- | --- | --- | ---
  *  2026/10/30 | kaouduo | V1.0 | 实现内部 HSI 最高主频、系统计时及受限 Flash 参数存储。
+ *  2026/10/31 | kaouduo | V1.1 | 系统初始化统一配置 USB HSI48 时钟与 SOF 自动校准。
  */
 
 #include "system_clock.h"
 #include "stm32g4xx_ll_bus.h"
+#include "stm32g4xx_ll_crs.h"
 #include "stm32g4xx_ll_pwr.h"
 #include "stm32g4xx_ll_rcc.h"
 #include "stm32g4xx_ll_system.h"
@@ -24,10 +26,10 @@
 #define CLOCK_WAIT_LIMIT 1000000U
 
 /**
- *  @brief  使用内部 HSI 和 PLL 配置 170 MHz 系统主频。
+ *  @brief  配置 HSI/PLL 170 MHz 主频和 HSI48/CRS USB 时钟。
  *  @param  无。
  *  @return SYS_OK 表示切换成功；SYS_ERROR_TIMEOUT 表示硬件等待超时；SYS_ERROR_IO 表示频率不符。
- *  @note   仅复位启动时调用；配置 Range 1 Boost、Flash 4 等待周期和总线时钟；失败后不得启动业务，应停机或复位。
+ *  @note   仅复位启动时调用；配置 Range 1 Boost、Flash 4 等待周期、USB 时钟及 CRS；不等待 SOF，失败后停止启动。
  */
 Sys_Status System_Clock_Init(void)
 {
@@ -95,7 +97,32 @@ Sys_Status System_Clock_Init(void)
     __DSB();
     __ISB();
 
-    /** 更新并校验系统核心时钟。 */
+    /** 配置 USB 独立的 48 MHz 时钟。 */
+    LL_RCC_HSI48_Enable();
+    timeout = CLOCK_WAIT_LIMIT;
+    while (LL_RCC_HSI48_IsReady() != 1U) {
+        if (--timeout == 0U) {
+            return SYS_ERROR_TIMEOUT;
+        }
+    }
+    LL_RCC_SetUSBClockSource(LL_RCC_USB_CLKSOURCE_HSI48);
+
+    /** 配置 CRS，以主机 1 kHz SOF 自动校准 HSI48。 */
+    LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_CRS);
+    LL_APB1_GRP1_ForceReset(LL_APB1_GRP1_PERIPH_CRS);
+    LL_APB1_GRP1_ReleaseReset(LL_APB1_GRP1_PERIPH_CRS);
+    LL_CRS_SetSyncDivider(LL_CRS_SYNC_DIV_1);
+    LL_CRS_SetSyncSignalSource(LL_CRS_SYNC_SOURCE_USB);
+    LL_CRS_SetSyncPolarity(LL_CRS_SYNC_POLARITY_RISING);
+    LL_CRS_SetReloadCounter(47999U);
+    LL_CRS_SetFreqErrorLimit(34U);
+    LL_CRS_SetHSI48SmoothTrimming(32U);
+    LL_CRS_EnableAutoTrimming();
+    LL_CRS_EnableFreqErrorCounter();
+
+    /** 更新并校验系统核心时钟与 USB 时钟源，不等待主机连接。 */
     SystemCoreClockUpdate();
-    return SystemCoreClock == 170000000U ? SYS_OK : SYS_ERROR_IO;
+    return SystemCoreClock == 170000000U && LL_RCC_GetUSBClockSource(LL_RCC_USB_CLKSOURCE) == LL_RCC_USB_CLKSOURCE_HSI48
+            ? SYS_OK
+            : SYS_ERROR_IO;
 }

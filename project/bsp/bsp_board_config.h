@@ -83,4 +83,20 @@
 #define BSP_BOARD_LED_G_PORT GPIOB                         /* 绿灯输出端口。 */
 #define BSP_BOARD_LED_G_PIN LL_GPIO_PIN_7                  /* 绿灯输出引脚。 */
 
+/* USB 模块：PA11 D-、PA12 D+，时序沿用参考工程。 */
+#define BSP_BOARD_USB_PORT GPIOA
+#define BSP_BOARD_USB_DM_PIN LL_GPIO_PIN_11
+#define BSP_BOARD_USB_DP_PIN LL_GPIO_PIN_12
+#define BSP_BOARD_USB_GPIO_CLOCK LL_AHB2_GRP1_PERIPH_GPIOA
+#define BSP_BOARD_USB_IRQ_PRIORITY 6U
+#define BSP_BOARD_USB_RESET_HOLD_MS 200U
+#define BSP_BOARD_USB_LINE_LOW_MS 300U
+/* 按 ST CubeMX CDC 默认标识进行本地验证；100 mA 为未实测的声明值。 */
+#define BSP_BOARD_USB_VID 0x0483U
+#define BSP_BOARD_USB_PID 0x5740U
+#define BSP_BOARD_USB_SELF_POWERED 0U
+#define BSP_BOARD_USB_MAX_POWER_MA 100U
+#define BSP_BOARD_USB_MANUFACTURER "STMicroelectronics"
+#define BSP_BOARD_USB_PRODUCT "STM32 Virtual ComPort"
+
 #endif /* BSP_BOARD_CONFIG_H */
