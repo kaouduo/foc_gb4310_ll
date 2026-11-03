@@ -54,6 +54,8 @@
 #define BSP_BOARD_ENCODER_CS_PIN LL_GPIO_PIN_4                         /* 编码器低有效片选引脚。 */
 
 /* 调试串口模块：USART3，PC10 发送、PC11 接收。 */
+#define BSP_BOARD_VOFA_BAUD 115200U           /* 16 通道 68 B，100 Hz 占用约 59% 线速。 */
+#define BSP_BOARD_VOFA_DMA_PRIORITY 6U        /* DMA1 Channel1 IRQ，低于电流采样 IRQ。 */
 #define BSP_BOARD_DEBUG_UART USART3           /* 调试串口外设。 */
 #define BSP_BOARD_DEBUG_TX_PORT GPIOC         /* 调试串口发送端口。 */
 #define BSP_BOARD_DEBUG_TX_PIN LL_GPIO_PIN_10 /* 调试串口发送引脚。 */

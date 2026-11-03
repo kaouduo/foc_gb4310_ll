@@ -11,6 +11,7 @@
 #include "app_log.h"
 #include "app_motor_internal.h"
 #include "app_motor_storage.h"
+#include "app_motor_telemetry.h"
 #include "bsp_encoder.h"
 #include "bsp_motor.h"
 #include "bsp_platform.h"
@@ -507,6 +508,9 @@ bool App_Motor_RuntimeFastStep(const MotorSample *sample)
         status = FOC_SVPWM(alpha, beta, input.bus_voltage_v, &duty);
         if (status == SYS_OK) {
             status = BSP_Motor.write_duty(BSP_Motor.context, duty.u, duty.v, duty.w);
+            if (status == SYS_OK && run.view.frames % APP_MOTOR_TELEMETRY_DIVIDER == 0U) {
+                App_Motor_PublishTelemetry(&input, &output, alpha, beta, &duty, u, v, w);
+            }
         }
         run.view.applied_voltage_v = output.ud_v;
     }

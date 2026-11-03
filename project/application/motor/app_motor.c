@@ -8,6 +8,7 @@
 #include <math.h>
 #include <string.h>
 #include "app_motor_internal.h"
+#include "app_motor_telemetry.h"
 #include "bsp_motor.h"
 #include "bsp_platform.h"
 #include "foc_math.h"
@@ -15,6 +16,27 @@
 #include "foc_svpwm.h"
 
 App_MotorContext motor;
+static volatile App_MotorTelemetry telemetry;
+
+/** @brief 控制 IRQ 发布一次成功计算的完整输入/输出；调用方已完成分频。 */
+void App_Motor_PublishTelemetry(const FOC_Input *input, const FOC_Output *output, float alpha, float beta,
+                                const FOC_Duty *duty, float u, float v, float w)
+{
+    telemetry = (App_MotorTelemetry){
+            .channels = {u, v, w, input->bus_voltage_v, input->voltage_limit_v, input->dt_s, input->id_a, input->iq_a,
+                         output->electrical_angle_rad, output->ud_v, output->uq_v, alpha, beta, duty->u, duty->v,
+                         duty->w},
+            .sequence = telemetry.sequence + 1U,
+    };
+}
+
+bool App_Motor_ReadTelemetry(App_MotorTelemetry *out)
+{
+    uint32_t mask = BSP_Motor.critical_enter();
+    *out = telemetry;
+    BSP_Motor.critical_exit(mask);
+    return out->sequence != 0U;
+}
 
 /** @brief ADC IRQ 同步入口；只做有界计算，不调用 RTOS、日志、存储或动态内存。 */
 static void App_Motor_FastStep(void *context, const MotorSample *sample)
@@ -54,6 +76,7 @@ static void App_Motor_FastStep(void *context, const MotorSample *sample)
 /** @brief 构造模式、注册采样回调并加载校准参数。 */
 Sys_Status App_Motor_Init(void)
 {
+    telemetry = (App_MotorTelemetry){0};
     motor.hardware = &BSP_Motor;
     const MotorScale *s = BSP_Motor.scale;
     motor.dt_s = 1.0f / s->pwm_hz;

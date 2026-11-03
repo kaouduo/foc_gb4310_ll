@@ -64,13 +64,13 @@ typedef struct {
 
 /** @brief BSP 静态能力；启停/读取/快照仅任务调用，写占空比/关断/临界事务也供控制 IRQ 使用。 */
 typedef struct {
-    void *context;                     /**< BSP 持有的静态 porting 实例，业务不解释其内容。 */
-    const MotorScale *scale;           /**< BSP 静态换算及调制边界，运行中只读。 */
+    void *context; /**< BSP 持有的静态 porting 实例，业务不解释其内容。 */
+    const MotorScale *scale; /**< BSP 静态换算及调制边界，运行中只读。 */
     Sys_Status (*init)(void *context); /**< 调度前一次初始化，不启动采样或输出。 */
     Sys_Status (*set_sample_callback)(void *context, MotorSampleCallback callback, void *user); /**< 停采样注册。 */
-    Sys_Status (*start_sampling)(void *context);                        /**< 启动同步 ADC，不使能功率输出。 */
-    Sys_Status (*stop_sampling)(void *context);                         /**< 关断输出并有界等待 ADC 停止。 */
-    Sys_Status (*read_bus)(void *context, uint16_t *raw);               /**< 独占规则组读取原始 ADC 计数。 */
+    Sys_Status (*start_sampling)(void *context); /**< 启动同步 ADC，不使能功率输出。 */
+    Sys_Status (*stop_sampling)(void *context); /**< 关断输出并有界等待 ADC 停止。 */
+    Sys_Status (*read_bus)(void *context, uint16_t *raw); /**< 独占规则组读取原始 ADC 计数。 */
     Sys_Status (*write_duty)(void *context, float u, float v, float w); /**< 写逻辑 U/V/W 占空比预装载。 */
     /** @brief 最多 1 秒，TIM 更新 IRQ 独立计时关断；用于已确认台架的波形检查。 */
     Sys_Status (*enable_test_output)(void *context, uint32_t periods);

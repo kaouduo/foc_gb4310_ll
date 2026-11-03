@@ -29,17 +29,19 @@
 #include "bsp_motor.h"
 #include "bsp_platform.h"
 #include "bsp_usb_cdc.h"
+#include "bsp_vofa.h"
 #include "dwt.h"
 #include "elog_port.h"
 #include "system_clock.h"
 #include "task.h"
-#include "uart_stm32.h"
 
 /* 栈配置以字节填写，传给 FreeRTOS 时换算为 StackType_t 元素数。 */
 #define STARTUP_STACK_BYTES 2048U
 #define LED_STACK_BYTES 2048U
 #define USB_STACK_BYTES 2048U
 #define MOTOR_STACK_BYTES 2048U
+#define VOFA_STACK_BYTES 1024U
+#define VOFA_PRIORITY 1U
 #define MOTOR_PRIORITY 3U
 #define USB_PRIORITY 2U
 #define STARTUP_PRIORITY 2U
@@ -59,6 +61,11 @@ static StackType_t usbTaskStack[USB_STACK_BYTES / sizeof(StackType_t)];
 static TaskHandle_t usbTaskHandle;
 static StaticTask_t ledTaskControl;
 static StackType_t ledTaskStack[LED_STACK_BYTES / sizeof(StackType_t)];
+static StaticTask_t vofaTaskControl;
+static StackType_t vofaTaskStack[VOFA_STACK_BYTES / sizeof(StackType_t)];
+/** @brief 遥测初始化独立结果；故障只禁用遥测，不改变电机保护状态。 */
+volatile Sys_Status appVofaInitResult = SYS_ERROR_NOT_READY;
+
 /** @brief 启动结果供调试器观察；未就绪、成功或具体失败码。 */
 volatile Sys_Status appStartupResult = SYS_ERROR_NOT_READY;
 
@@ -87,7 +94,6 @@ static void Board_IO_Init(void)
     BSP_Motor_Bind();
     /* 调度前配置安全 GPIO/关闭输出并校准 ADC；不启动采样。 */
     motorHardwareResult = BSP_Motor.init(BSP_Motor.context);
-    UART_BoardIO_Init();
     BSP_LED_Bind();
 }
 
@@ -149,6 +155,12 @@ static void App_StartupTask(void *argument)
             ? encoderResult
             : (flashResult != SYS_OK ? flashResult : (motorResult != SYS_OK ? motorResult : usbResult));
     LOG_I("system", "Startup status=%d", (int)appStartupResult);
+    appVofaInitResult = BSP_VOFA.init(BSP_VOFA.context);
+    LOG_I("vofa", "USART3 DMA init status=%d", (int)appVofaInitResult);
+    if (motorResult == SYS_OK && appVofaInitResult == SYS_OK) {
+        (void)xTaskCreateStatic(App_VOFA_Task, "vofa", VOFA_STACK_BYTES / sizeof(StackType_t), NULL, VOFA_PRIORITY,
+                                vofaTaskStack, &vofaTaskControl);
+    }
     LOG_D("system", "Debug logging enabled");
     /* 初始化结果发布后才启动指示任务，初始化期间保持驱动默认熄灭。 */
     (void)xTaskCreateStatic(App_LEDTask, "led", LED_STACK_BYTES / sizeof(StackType_t), NULL, LED_PRIORITY, ledTaskStack,

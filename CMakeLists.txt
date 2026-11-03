@@ -13,6 +13,7 @@ add_executable(${PROJECT_NAME}
     project/application/state/app_device_state.c
     project/application/led/app_led.c
     project/application/task/app_motor_task.c
+    project/application/task/app_vofa_task.c
     project/application/task/app_led_task.c
     project/application/task/app_usb_task.c
     project/application/shell/app_shell.c
@@ -23,6 +24,8 @@ add_executable(${PROJECT_NAME}
 
     # bsp 板级支持层
     project/bsp/motor/bsp_motor.c
+    project/bsp/vofa/bsp_vofa.c
+    project/middleware/vofa/vofa_justfloat.c
     project/bsp/platform/bsp_platform.c
     project/bsp/platform/bsp_internal_flash.c
     project/bsp/encoder/bsp_encoder.c
@@ -69,6 +72,8 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     project/application/motor
+    project/bsp/vofa
+    project/middleware/vofa
     project/middleware/control
     project/middleware/foc
     project/bsp/motor

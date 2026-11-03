@@ -89,8 +89,22 @@ main 在时钟/DWT 就绪后绑定输出/时间回调，以 App_LogPlatform 注�
 16 KB RTOS 堆大小未改，USB/LED 与日志锁继续静态分配。Debug RAM 28808 B（87.92%），Release 28760 B（87.77%），各减少 2152 B；动态 startup 在运行期间消耗既有 RTOS 堆，删除后可复用。先前三轮 startup 静态栈水位属于历史实现，新版尚未烧录/实测动态堆回收。
 
 
-## FOC 阶段 3 提交状态
+## FOC 阶段 1 资源追加（2026-10-31）
 
-编码器校准、质量检查和 Flash 保存；诊断保护与停止流程已收敛，尚未接入 UART 遥测。
+RTOS heap_4 容量从 16 KB 调整为 8 KB。没有新增电机任务；阶段 1 短时诊断由现有 USB/Shell 任务发起，ADC IRQ 同步执行注册回调。ADC1_2 与 TIM1_UP_TIM16 使用优先级 4，不能调用 FreeRTOS API。
 
-本提交为按功能依赖整理的源码快照。实板历史记录按各阶段文档阅读；提交前另行构建 Debug/Release，不将历史测试冒充中间快照再次实板验收。
+最终 Debug/Release/Debug 三轮启动峰值堆最少剩余 6008/6016/6008 B；startup 动态栈已回收，最终空闲堆 8176/8184/8176 B。USB 2048 B 静态栈在本轮测试的填充值未使用区最少 556 B；LED 栈最少 1792 B。后续加入真实电流闭环、校准和 supervisor 后需重新核算。
+
+TIM1 更新 IRQ 用于阶段 1 PWM 波形测试的最多 1 s 租期，不能把该诊断接口当持续电机运行接口。ADC 错误或更新截止时间超限会直接关闭输出并停触发。CPU Fault/NMI 与 FreeRTOS 断言具有底层关断路径，尚未进行实际功率异常注入验收。
+
+
+## FOC 阶段 2 当前资源（2026-10-31）
+
+新增静态 motor 任务，优先级 3、栈 2048 B，周期 1 ms，负责开环启动/自动零偏/母线与编码器遥测/故障日志；快速计算仍在优先级 4 的 ADC IRQ 中。任务数为 5（idle、timer、LED、USB、motor），startup 动态栈已回收。错过监督周期后跳过旧 tick，不追赶准备阶段积压周期。
+
+Debug RAM 23224 B（70.87%）、Flash 104248 B（80.80%）；Release RAM 23176 B（70.73%）、Flash 65720 B（50.94%）。RTOS 堆仍为 8 KB，三轮最低空闲堆及 USB/LED/motor 栈余量见 14_foc_stage2_open_voltage.md；不能用阶段 1 的无 motor 任务资源作为当前占用。
+
+
+## VOFA 静态任务（2026-11-02，当前状态）
+
+新增vofa持久任务，优先级1、1024B静态栈、1ms检查最新控制快照；任务数为6（idle/timer/LED/USB/motor/vofa）。快速环每200帧发布，最高100Hz，任务构造68B JustFloat并非阻塞提交USART3 DMA。DMA1 Channel1 IRQ优先级6，只清硬件标志、计数和释放缓冲，不调用RTOS；ADC控制IRQ仍优先级4。该持久任务使用静态栈是有意设计，不采用一次性startup任务的动态自删除方式。三轮遥测栈最多触及316B，至少708B未触及；实际资源及接收验证见18记录。

@@ -4,7 +4,7 @@
 
 ## 六层结构
 
-依赖方向单向向下：`application → bsp → driver → porting → middleware`，`common` 被各层共用，只有头文件。
+依赖按各层职责限定，不把目录顺序当作调用链：application 使用 BSP/driver/middleware/common；BSP 绑定 driver 与 porting；porting 不反向引用 BSP；middleware 只依赖 common/自身算法，common 只有定义。
 
 | 层 | 目录 | 职责 | 禁止 |
 |---|---|---|---|
@@ -75,8 +75,22 @@ S4 最终资源：Debug Flash 82596 B、RAM 30960 B；Release Flash 42156 B、RA
 当前追加资源修正：startup 动态创建，移除 2152 B 永久静态存储；Debug Flash 82812 B / RAM 28808 B，Release Flash 42256 B / RAM 28760 B。USB、LED 和日志锁保持静态，16 KB RTOS 堆未改。新版未烧录，前述三轮为改动前实板结果。
 
 
-## FOC 阶段 3 提交状态
+## FOC 阶段 1 当前实现（2026-10-31）
 
-编码器校准、质量检查和 Flash 保存；诊断保护与停止流程已收敛，尚未接入 UART 遥测。
+BSP_Motor 只 bind 静态板级资源、porting 能力和量纲参数。main 的 Board_IO_Init 在调度前完成电机安全硬件初始化，startup 构造三个 FOC 模式并通过 BSP 注册快速回调。默认不启动采样或功率输出。
 
-本提交为按功能依赖整理的源码快照。实板历史记录按各阶段文档阅读；提交前另行构建 Debug/Release，不将历史测试冒充中间快照再次实板验收。
+中断规则补充：电机同步采样 IRQ 允许通过注册回调执行有界控制计算，不依赖 RTOS 通知。porting 不反向 include application；PI、Clarke/Park/逆 Park、SVPWM 和模式在 middleware。阶段 1 test chain 只干运行开环链路，实际编码器闭环、电流闭环和标定尚未开放。
+
+旧 current_sampling/adc_regular GPIO 占位合入统一 motor_sampling 后删除。TIM1 时基/CH4/ADC 由同一模块管理，PWM 只负责输出；编码器 SPI 改为 BSP 配置 /16、名义 10.625 MHz。Flash 预取已启用，实时文件采用 O2（Debug 保留 g3/日志），其余文件仍使用现有构建优化配置。
+
+当前资源与三轮测试、完整实际文件清单见 [FOC 阶段 1](13_foc_stage1_validation.md)，不再使用前述 Shell/日志历史占用作为当前值。四项限时 PWM 台架测试已按用户授权通过；外部波形沿用用户此前硬件验证。
+
+
+## FOC 阶段 2 追加（2026-10-31）
+
+application/motor 新增内部共享头和 runtime，将原诊断路径与正常开环生命周期分开，共用唯一三模式实例；ADC 回调先分派运行模式，再分派诊断。BSP 只新增绑定 enable_output（最多 10 s 租期）和有界状态事务；IRQ 保持无 RTOS/日志/内存分配。新增 motor 命令与 1 ms task，正常开环不依赖已标定电角度。具体当前状态与目录见 14_foc_stage2_open_voltage.md。
+
+
+## USART3 遥测绑定（2026-11-02）
+
+USART3 PC10 AF7 TX现用于VOFA；PC11接收未启用。BSP/vofa只绑定静态UART实例及配置，porting/uart统一拥有USART3、DMA1 Channel1与DMAMUX request29，无BSP反向依赖。middleware/vofa只编码JustFloat；application采集同周期FOC数据，由独立vofa任务通过BSP发送，与USB CDC独立。默认115200 8N1、100Hz/16通道，当前J-Link接收器高速不完整的实测边界见18_vofa_uart_dma.md。

@@ -39,6 +39,12 @@ void App_LEDTask(void *argument);
  * @note FreeRTOS 任务；快速环在 ADC IRQ，长准备后跳过旧节拍。
  */
 void App_MotorTask(void *argument);
+/** @brief 1 ms 遥测任务，读取新控制快照并提交 USART3 DMA。
+ * @param argument 未使用。
+ * @return 不返回。
+ * @note 唯一 UART 发送者，静态栈 1024 B，优先级 1；停机无新样本时不发送旧帧。
+ */
+void App_VOFA_Task(void *argument);
 
 /** @brief 等待启动通知后处理 CDC Shell；单任务独占收发，栈静态分配 2048 B。 */
 void App_USBTask(void *argument);

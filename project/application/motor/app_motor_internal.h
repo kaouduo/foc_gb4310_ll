@@ -41,6 +41,11 @@ typedef struct {
 } App_MotorContext;
 /** @brief 单轴共享内部对象；采样期间统计由 IRQ 写，监督任务在停采样后读取。 */
 extern App_MotorContext motor;
+/** @brief 控制 IRQ 分频后发布同周期输入/输出、电压和三相电流；不持有参数指针。
+ * @note alpha/beta 为逆 Park 输出电压 V，u/v/w 为本帧反馈电流 A。
+ */
+void App_Motor_PublishTelemetry(const FOC_Input *input, const FOC_Output *output, float alpha, float beta,
+                                const FOC_Duty *duty, float u, float v, float w);
 
 /** @brief 启动时初始化运行状态及加载参数；Flash 和 BSP 已就绪。 */
 void App_Motor_RuntimeInit(void);
