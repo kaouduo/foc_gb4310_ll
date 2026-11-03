@@ -16,6 +16,12 @@ static const char *const states[] = {"idle", "queued", "preparing", "open", "sto
 static const char *const reasons[] = {"none",    "done",     "stop",          "zero",         "sample",
                                       "rail",    "current",  "under_voltage", "over_voltage", "stale",
                                       "compute", "deadline", "calibration"};
+static const char *const calPhases[] = {
+        "idle",      "align",           "map_move",     "map_hold", "return",          "zero_hold",
+        "forward",   "forward_realign", "forward_hold", "reverse",  "reverse_realign", "reverse_hold",
+        "ramp_down", "saving",          "done",         "failed",   "cancelled"};
+static const char *const calErrors[] = {"none",        "stop",    "feedback", "stall",  "timeout",
+                                        "current_map", "quality", "storage",  "runtime"};
 static long Milli(float value)
 {
     return (long)(value * 1000.0f + (value >= 0.0f ? 0.5f : -0.5f));
@@ -76,7 +82,41 @@ static bool Milliseconds(const char *text, uint32_t *value)
 static int Motor(int argc, char **argv)
 {
     chry_shell_t *shell = (void *)argv[argc + 1];
-
+    if (argc == 3 && strcmp(argv[1], "cal") == 0) {
+        if (strcmp(argv[2], "start") == 0) {
+            Sys_Status status = App_Motor_RequestCalibration();
+            csh_printf(shell, "%s motor cal %s status=%d\r\n", status == SYS_OK ? "OK" : "ERR",
+                       status == SYS_OK ? "queued" : "rejected", (int)status);
+            return status == SYS_OK ? 0 : -1;
+        }
+        if (strcmp(argv[2], "stop") == 0) {
+            App_Motor_Stop();
+            csh_printf(shell, "OK motor stopped\r\n");
+            return 0;
+        }
+        if (strcmp(argv[2], "status") == 0) {
+            MotorCalibration c;
+            MotorCalSnapshot p;
+            App_Motor_GetCalibration(&c, &p);
+            csh_printf(shell,
+                       "CAL phase=%s error=%s status=%d elapsed_ms=%lu forward_counts=%ld reverse_counts=%ld\r\n",
+                       calPhases[p.phase], calErrors[p.error], (int)p.status, (unsigned long)p.elapsed_ms,
+                       (long)p.forward_counts, (long)p.reverse_counts);
+            csh_printf(shell, "CAL failed_at=%s stable_span_counts=%lu zero_spread_mrad=%ld\r\n",
+                       calPhases[p.failed_phase], (unsigned long)p.stable_span_counts, Milli(p.zero_spread_rad));
+            csh_printf(shell, "CAL directional_gap_mrad=%ld static_error_mrad=%ld return_error_mrad=%ld\r\n",
+                       Milli(p.directional_gap_rad), Milli(p.static_error_rad), Milli(p.return_error_rad));
+            csh_printf(shell, "CAL stored valid=%u saved=%u poles=%lu direction=%ld offset_mrad=%ld\r\n", c.valid,
+                       c.saved, (unsigned long)c.pole_pairs, (long)c.direction, Milli(c.offset_rad));
+            csh_printf(shell,
+                       "CAL candidate valid=%u saved=%u poles=%lu direction=%ld offset_mrad=%ld fit_milli=%ld,%ld "
+                       "rms_mrad=%ld,%ld\r\n",
+                       p.result.valid, p.result.saved, (unsigned long)p.result.pole_pairs, (long)p.result.direction,
+                       Milli(p.result.offset_rad), Milli(p.result.forward_poles), Milli(p.result.reverse_poles),
+                       Milli(p.result.forward_rms_rad), Milli(p.result.reverse_rms_rad));
+            return 0;
+        }
+    }
     if (argc == 2 && strcmp(argv[1], "status") == 0) {
         App_MotorRunSnapshot s;
         MotorHardwareSnapshot hw;
@@ -124,13 +164,17 @@ static int Motor(int argc, char **argv)
         return status == SYS_OK ? 0 : -1;
     }
 usage:
-    csh_printf(shell, "ERR usage: motor open [Hz V duration_ms ramp_ms] | stop | status | clear\r\n");
+    csh_printf(shell,
+               "ERR usage: motor open [Hz V duration_ms ramp_ms] | stop | status | clear | cal start|status|stop\r\n");
     return -1;
 }
 CSH_CMD_EXPORT_ALIAS_FULL(Motor, motor, "开环电压运行、停止、状态和故障清除",
                           "motor open                         - 默认 2 Hz、1 V、3 s、200 ms 上下电压斜坡\r\n"
                           "motor open Hz V duration_ms ramp_ms - 电频率 ±100 Hz；100..10000 ms；斜坡不超过时长一半\r\n"
                           "                                     电压按实际母线及调制范围动态限幅，无固定 8 V 上限\r\n"
+                          "motor cal start                    - 2 Hz/5 V 编码器校准，质量通过后停机保存\r\n"
+                          "motor cal status                   - 校准阶段、质量结果和已保存参数\r\n"
+                          "motor cal stop                     - 取消校准，保留原参数\r\n"
                           "motor stop                         - 立即关闭输出，取消正在准备的启动\r\n"
                           "motor status                       - 运行结果、电流、母线、编码器与故障现场\r\n"
                           "motor clear                        - 条件恢复后显式清故障，不自动重启\r\n");

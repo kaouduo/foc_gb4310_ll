@@ -12,6 +12,7 @@
 #ifndef FOC_ENABLE_MOTOR_DIAGNOSTICS
 #define FOC_ENABLE_MOTOR_DIAGNOSTICS 0
 #endif
+#include "app_motor_calibration.h"
 #include "motor_io.h"
 #include "mt6826s_drv.h"
 
@@ -139,7 +140,20 @@ typedef struct {
     uint16_t fault_raw_v;            /**< 首故障 V 相 ADC 计数。 */
     bool encoder_valid;              /**< 最近一次编码器读取是否成功。 */
 } App_MotorRunSnapshot;
-
+/**
+ * @brief 排队提交 2 Hz、5 V 编码器校准。
+ * @return SYS_OK 仅表示接受；忙或故障时拒绝。
+ * @note 计算通过后由监督任务先停机再保存，取消和质量失败不写新记录。
+ */
+Sys_Status App_Motor_RequestCalibration(void);
+/**
+ * @brief 复制已持有参数和本轮校准进度。
+ * @param calibration 上次有效参数输出。
+ * @param progress 本轮候选结果及失败原因输出。
+ * @return 无。
+ * @note 任务调用，在短临界区内复制一致状态。
+ */
+void App_Motor_GetCalibration(MotorCalibration *calibration, MotorCalSnapshot *progress);
 /**
  * @brief 排队提交有限时间开环请求。
  * @param command 电频率 Hz、幅值 V、持续时间和斜坡 ms。

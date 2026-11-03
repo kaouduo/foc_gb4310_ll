@@ -10,6 +10,7 @@
 #include "app_device_state.h"
 #include "app_log.h"
 #include "app_motor_internal.h"
+#include "app_motor_storage.h"
 #include "bsp_encoder.h"
 #include "bsp_motor.h"
 #include "bsp_platform.h"
@@ -31,6 +32,11 @@ typedef struct {
     bool diagnostic_pwm;
     FOC_Duty diagnostic_duty;
 #endif
+    volatile bool calibrating, command_pending;
+    FOC_OpenVoltageCommand pending;
+    MotorCalibration calibration;
+    uint16_t encoder_origin;
+    int32_t encoder_delta;
     volatile bool report_pending;
     uint32_t max_age_cycles;
     volatile uint32_t generation, bus_cycles, last_sample_cycles;
@@ -46,6 +52,8 @@ void App_Motor_RuntimeInit(void)
 {
     memset(&run, 0, sizeof(run));
     run.encoder_status = SYS_ERROR_NOT_READY;
+    Sys_Status loaded = App_Motor_StorageLoad(&run.calibration);
+    LOG_I("motor", "Calibration load status=%d valid=%u", (int)loaded, run.calibration.valid);
     run.max_age_cycles = (BSP_Platform_ClockHz() / 1000000U) * RUN_FEEDBACK_MAX_US;
 }
 bool App_Motor_RuntimeBusy(void)
@@ -105,10 +113,42 @@ static void Finish(App_MotorReason reason)
         run.view.status = status;
         run.view.state = APP_MOTOR_IDLE;
     }
-
+    bool save = false;
+    if (run.calibrating) {
+        MotorCalSnapshot progress;
+        MotorCal_GetSnapshot(&progress);
+        save = reason == APP_MOTOR_REASON_DONE && status == SYS_OK && run.view.faults == 0U &&
+                progress.phase == MOTOR_CAL_SAVING && !run.stop_requested;
+        if (save) {
+            run.view.state = APP_MOTOR_STOPPING;
+        } else if (progress.phase != MOTOR_CAL_FAILED && progress.phase != MOTOR_CAL_CANCELLED) {
+            MotorCal_Abort(reason == APP_MOTOR_REASON_STOP
+                                   ? MOTOR_CAL_ERROR_STOP
+                                   : (reason == APP_MOTOR_REASON_CALIBRATION && run.view.status == SYS_ERROR_TIMEOUT
+                                              ? MOTOR_CAL_ERROR_TIMEOUT
+                                              : MOTOR_CAL_ERROR_RUNTIME),
+                           reason == APP_MOTOR_REASON_STOP ? SYS_OK : run.view.status);
+        }
+    }
     run.report_pending = true;
     BSP_Motor.critical_exit(mask);
-
+    if (save) {
+        MotorCalSnapshot progress;
+        MotorCal_GetSnapshot(&progress);
+        status = App_Motor_StorageSave(&progress.result);
+        MotorCal_SetSaved(status);
+        if (status == SYS_OK) {
+            progress.result.saved = true;
+            run.calibration = progress.result;
+            run.view.state = APP_MOTOR_IDLE;
+            LOG_I("cal", "Saved poles=%lu direction=%ld offset_mrad=%ld", (unsigned long)run.calibration.pole_pairs,
+                  (long)run.calibration.direction, (long)(run.calibration.offset_rad * 1000.0f));
+        } else {
+            run.calibration.saved = false;
+            Fault(APP_MOTOR_REASON_CALIBRATION, status, SYSTEM_FAULT_STORAGE);
+        }
+    }
+    run.calibrating = false;
     if (run.view.faults) {
         run.view.state = APP_MOTOR_FAULT;
     }
@@ -133,6 +173,10 @@ void App_Motor_RequestStop(void)
     if (state == APP_MOTOR_QUEUED) {
         run.view.state = APP_MOTOR_IDLE;
         run.view.reason = APP_MOTOR_REASON_STOP;
+        if (run.calibrating) {
+            MotorCal_Abort(MOTOR_CAL_ERROR_STOP, SYS_OK);
+        }
+        run.calibrating = false;
     }
     /* 准备期由采集所有者响应取消并停止 ADC；这里仅立即关闭功率输出。 */
     BSP_Motor.critical_exit(mask);
@@ -156,6 +200,7 @@ Sys_Status App_Motor_RequestOpen(const App_MotorOpenCommand *cmd)
     } else if (motor.busy || App_Motor_RuntimeBusy()) {
         status = SYS_ERROR_BUSY;
     } else {
+        run.calibrating = false;
 #if FOC_ENABLE_MOTOR_DIAGNOSTICS
         run.diagnostic_pwm = false;
 #endif
@@ -195,6 +240,38 @@ Sys_Status App_Motor_RequestPWM(App_MotorTest test)
     return status;
 }
 #endif
+
+/** @brief 排队提交 2 Hz、5 V 编码器校准。 */
+Sys_Status App_Motor_RequestCalibration(void)
+{
+    uint32_t mask = BSP_Motor.critical_enter();
+    Sys_Status status = SYS_OK;
+    if (!motor.initialized || App_DeviceState_Get().faults || run.view.faults) {
+        status = SYS_ERROR_NOT_READY;
+    } else if (motor.busy || App_Motor_RuntimeBusy()) {
+        status = SYS_ERROR_BUSY;
+    } else {
+        run.calibrating = true;
+#if FOC_ENABLE_MOTOR_DIAGNOSTICS
+        run.diagnostic_pwm = false;
+#endif
+        run.command = (App_MotorOpenCommand){0.0f, MOTOR_CAL_VOLTAGE_V, MOTOR_CAL_MAX_MS, 200U};
+        ++run.generation;
+        run.stop_requested = false;
+        MotorCal_Begin(BSP_Motor.scale->pwm_hz);
+        run.view.state = APP_MOTOR_QUEUED;
+    }
+    BSP_Motor.critical_exit(mask);
+    return status;
+}
+/** @brief 复制已持有参数和本轮校准进度。 */
+void App_Motor_GetCalibration(MotorCalibration *calibration, MotorCalSnapshot *progress)
+{
+    uint32_t mask = BSP_Motor.critical_enter();
+    *calibration = run.calibration;
+    MotorCal_GetSnapshot(progress);
+    BSP_Motor.critical_exit(mask);
+}
 
 /** @brief 读取母线、执行保护并发布带时间戳的缓存。 */
 static Sys_Status UpdateBus(void)
@@ -240,6 +317,7 @@ static void UpdateEncoder(void)
             if (delta < -(int32_t)MT6826S_COUNTS_PER_TURN / 2) {
                 delta += MT6826S_COUNTS_PER_TURN;
             }
+            run.encoder_delta = delta;
             run.view.mechanical_delta_counts += delta;
         }
         run.have_encoder = true;
@@ -265,6 +343,8 @@ static void Start(void)
     run.have_encoder = false;
     run.previous_sequence = 0U;
     run.ramping_down = false;
+    run.command_pending = false;
+    run.encoder_delta = 0;
     if (UpdateBus() != SYS_OK) {
         return;
     }
@@ -281,7 +361,12 @@ static void Start(void)
         return;
     }
     UpdateEncoder();
-
+    run.encoder_origin = run.view.encoder_raw;
+    if (run.calibrating && !run.view.encoder_valid) {
+        MotorCal_Abort(MOTOR_CAL_ERROR_FEEDBACK, SYS_ERROR_IO);
+        Fault(APP_MOTOR_REASON_CALIBRATION, SYS_ERROR_IO, SYSTEM_FAULT_ENCODER);
+        return;
+    }
     float volts = run.command.voltage_v < run.view.voltage_limit_v ? run.command.voltage_v : run.view.voltage_limit_v;
     FOC_OpenVoltageCommand command = {run.command.frequency_hz, volts, run.command.ramp_ms * 0.001f};
     status = FOC_OpenVoltage_SetCommand(&motor.open, &command);
@@ -384,7 +469,10 @@ bool App_Motor_RuntimeFastStep(const MotorSample *sample)
         return true;
     }
     if (++run.view.frames >= run.view.target_frames) {
-
+        if (run.calibrating) {
+            Fault(APP_MOTOR_REASON_CALIBRATION, SYS_ERROR_TIMEOUT, SYSTEM_FAULT_CONTROL_TIMEOUT);
+            return true;
+        }
         BSP_Motor.disable_output(BSP_Motor.context);
         run.view.state = APP_MOTOR_STOPPING;
         run.view.reason = APP_MOTOR_REASON_DONE;
@@ -396,12 +484,15 @@ bool App_Motor_RuntimeFastStep(const MotorSample *sample)
         return true;
     }
 #endif
-    if (!run.ramping_down && run.view.frames >= run.ramp_down_at) {
+    if (!run.calibrating && !run.ramping_down && run.view.frames >= run.ramp_down_at) {
         FOC_OpenVoltageCommand command = {run.command.frequency_hz, 0.0f, run.command.ramp_ms * 0.001f};
         (void)FOC_OpenVoltage_SetCommand(&motor.open, &command);
         run.ramping_down = true;
     }
-
+    if (run.command_pending) {
+        (void)FOC_OpenVoltage_SetCommand(&motor.open, &run.pending);
+        run.command_pending = false;
+    }
     FOC_Input input = {.dt_s = motor.dt_s,
                        .bus_voltage_v = run.view.bus_v,
                        .voltage_limit_v = run.view.voltage_limit_v,
@@ -447,10 +538,47 @@ void App_Motor_Process(void)
             Fault(APP_MOTOR_REASON_SAMPLE, SYS_ERROR_DEVICE, SYSTEM_FAULT_POWER_STAGE);
         } else if (UpdateBus() == SYS_OK) {
             UpdateEncoder();
+            if (run.calibrating && run.view.state == APP_MOTOR_OPEN) {
+                uint32_t mask = BSP_Motor.critical_enter();
+                MotorCalInput input = {.frames = run.view.frames,
+                                       .mechanical_counts = run.view.mechanical_delta_counts + run.encoder_origin,
+                                       .electrical_angle_rad = motor.open.angle_rad,
+                                       .current_u_a = run.view.current_u_a,
+                                       .current_v_a = run.view.current_v_a,
+                                       .encoder_valid = run.view.encoder_valid && run.encoder.status == 0U &&
+                                               run.encoder_delta > -128 && run.encoder_delta < 128};
+                BSP_Motor.critical_exit(mask);
+                MotorCalAction action;
+                Sys_Status status = MotorCal_Step(&input, &action);
+                if (status != SYS_OK) {
+                    MotorCalSnapshot progress;
+                    MotorCal_GetSnapshot(&progress);
+                    uint32_t faults = progress.error == MOTOR_CAL_ERROR_CURRENT_MAP
+                            ? SYSTEM_FAULT_POWER_STAGE
+                            : (progress.error == MOTOR_CAL_ERROR_TIMEOUT || progress.error == MOTOR_CAL_ERROR_STALL
+                                       ? SYSTEM_FAULT_CONTROL_TIMEOUT
+                                       : SYSTEM_FAULT_ENCODER);
+                    Fault(APP_MOTOR_REASON_CALIBRATION, status, faults);
+                } else {
+                    mask = BSP_Motor.critical_enter();
+                    /* 计算期间 ADC IRQ 可能已锁存故障，不能用任务阶段推进覆盖关断状态。 */
+                    if (run.view.state == APP_MOTOR_OPEN && !run.stop_requested && !run.view.faults) {
+                        if (action.finished) {
+                            BSP_Motor.disable_output(BSP_Motor.context);
+                            run.view.reason = APP_MOTOR_REASON_DONE;
+                            run.view.state = APP_MOTOR_STOPPING;
+                        } else if (action.change_command) {
+                            run.pending = (FOC_OpenVoltageCommand){action.frequency_hz, action.voltage_v, 0.2f};
+                            run.command_pending = true;
+                        }
+                    }
+                    BSP_Motor.critical_exit(mask);
+                }
+            }
         }
     }
     if (run.view.state == APP_MOTOR_STOPPING ||
-        (run.view.state == APP_MOTOR_FAULT && (run.owns_sampling || run.entered))) {
+        (run.view.state == APP_MOTOR_FAULT && (run.owns_sampling || run.entered || run.calibrating))) {
         Finish(run.view.reason);
     }
     if (run.report_pending) {

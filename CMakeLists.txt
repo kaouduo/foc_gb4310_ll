@@ -7,6 +7,8 @@ add_executable(${PROJECT_NAME}
     project/application/motor/app_motor.c
     project/application/motor/app_motor_diagnostics.c
     project/application/motor/app_motor_runtime.c
+    project/application/motor/app_motor_calibration.c
+    project/application/motor/app_motor_storage.c
     project/application/main.c
     project/application/state/app_device_state.c
     project/application/led/app_led.c
@@ -138,6 +140,8 @@ set_source_files_properties(
     project/application/motor/app_motor.c
     project/application/motor/app_motor_diagnostics.c
     project/application/motor/app_motor_runtime.c
+    project/application/motor/app_motor_calibration.c
+    project/application/motor/app_motor_storage.c
     project/porting/stm32g4/dwt.c
     project/bsp/encoder/bsp_encoder.c
     project/driver/mt6826s/mt6826s_drv.c

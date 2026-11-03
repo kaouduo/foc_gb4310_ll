@@ -58,7 +58,8 @@ static uint8_t Complete(chry_readline_t *rl, char *pre, uint16_t *size, const ch
             "sync", "chain", "foc",     "pwm",
 #endif
     };
-    static const char *const motorCommands[] = {"open", "stop", "status", "clear"};
+    static const char *const motorCommands[] = {"open", "stop", "status", "clear", "cal"};
+    static const char *const calibrationCommands[] = {"start", "status", "stop"};
 #if FOC_ENABLE_MOTOR_DIAGNOSTICS
     static const char *const phases[] = {"u", "v", "w", "all"};
 #endif
@@ -73,6 +74,10 @@ static uint8_t Complete(chry_readline_t *rl, char *pre, uint16_t *size, const ch
     } else if (wordCount == 2U && lengths[0] == 5U && memcmp(words[0], "motor", 5U) == 0) {
         candidates = motorCommands;
         count = sizeof(motorCommands) / sizeof(motorCommands[0]);
+    } else if (wordCount == 3U && lengths[0] == 5U && memcmp(words[0], "motor", 5U) == 0 && lengths[1] == 3U &&
+               memcmp(words[1], "cal", 3U) == 0) {
+        candidates = calibrationCommands;
+        count = sizeof(calibrationCommands) / sizeof(calibrationCommands[0]);
 #if FOC_ENABLE_MOTOR_DIAGNOSTICS
     } else if (wordCount == 3U && lengths[0] == 4U && memcmp(words[0], "test", 4U) == 0 && lengths[1] == 3U &&
                memcmp(words[1], "pwm", 3U) == 0) {
