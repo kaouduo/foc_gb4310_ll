@@ -83,6 +83,19 @@ static int Test(int argc, char **argv)
         test = APP_MOTOR_TEST_SYNC;
     } else if (argc == 2 && strcmp(argv[1], "chain") == 0) {
         test = APP_MOTOR_TEST_CHAIN;
+    } else if (argc == 3 && strcmp(argv[1], "pwm") == 0) {
+        if (strcmp(argv[2], "u") == 0) {
+            test = APP_MOTOR_TEST_PWM_U;
+        } else if (strcmp(argv[2], "v") == 0) {
+            test = APP_MOTOR_TEST_PWM_V;
+        } else if (strcmp(argv[2], "w") == 0) {
+            test = APP_MOTOR_TEST_PWM_W;
+        } else if (strcmp(argv[2], "all") == 0) {
+            test = APP_MOTOR_TEST_PWM_ALL;
+        } else {
+            goto usage;
+        }
+        csh_printf(shell, "PWM diagnostic test 1000 ms\r\n");
 #endif
     } else {
         goto usage;
@@ -125,7 +138,7 @@ usage:
     csh_printf(shell,
                "ERR usage: test enc|bus|current|zero|motor|stop"
 #if FOC_ENABLE_MOTOR_DIAGNOSTICS
-               "|sync|chain|foc"
+               "|sync|chain|foc; test pwm u|v|w|all"
 #endif
                "\r\n");
     return -1;
@@ -142,5 +155,6 @@ CSH_CMD_EXPORT_ALIAS_FULL(Test, test, "电机硬件链路与 FOC 算法检查",
 #endif
                           "test motor    - 硬件初始化、采样和输出状态\r\n"
 #if FOC_ENABLE_MOTOR_DIAGNOSTICS
+                          "test pwm u|v|w|all - 带电保护下测量最多 1 秒 PWM 波形，过流立即关断\r\n"
 #endif
                           "test stop     - 关闭输出并停止采样\r\n");

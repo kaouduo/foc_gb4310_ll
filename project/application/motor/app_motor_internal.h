@@ -42,12 +42,21 @@ typedef struct {
 /** @brief 单轴共享内部对象；采样期间统计由 IRQ 写，监督任务在停采样后读取。 */
 extern App_MotorContext motor;
 
+/** @brief 启动时初始化运行状态及加载参数；Flash 和 BSP 已就绪。 */
+void App_Motor_RuntimeInit(void);
+/** @brief ADC IRQ 分派入口；true 表示运行执行器已消费样本，false 交给诊断。 */
+bool App_Motor_RuntimeFastStep(const MotorSample *sample);
+/** @brief 是否持有采样或处于排队/准备/运行/收尾阶段；供任务门禁使用。 */
+bool App_Motor_RuntimeBusy(void);
+/** @brief 准备期采样等待循环读取取消标志，不触碰硬件。 */
+bool App_Motor_PreparationCancelled(void);
 /** @brief 监督任务在输出关闭时采集 1000 点零偏，约 50 ms；返回采集/质量结果。 */
 Sys_Status App_Motor_PrepareZero(void);
 /** @brief 输出关闭时独占采集；生产零偏和诊断共用，不允许启用功率输出。 */
 Sys_Status App_Motor_Acquire(App_MotorTest test, App_MotorTestResult *out);
 #if FOC_ENABLE_MOTOR_DIAGNOSTICS
-
+/** @brief Debug 固定 PWM 通过正常运行执行器排队，复用全部快速保护。 */
+Sys_Status App_Motor_RequestPWM(App_MotorTest test);
 /** @brief Debug 关闭输出的链路诊断扩展；仅 ADC IRQ 调用。 */
 void App_Motor_DiagnosticFastStep(const MotorSample *sample);
 /** @brief 任务态进入干运行对象，entered 输出表示是否需要退出。 */

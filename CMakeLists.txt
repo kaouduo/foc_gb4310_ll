@@ -6,14 +6,17 @@ add_executable(${PROJECT_NAME}
     # application 应用层
     project/application/motor/app_motor.c
     project/application/motor/app_motor_diagnostics.c
+    project/application/motor/app_motor_runtime.c
     project/application/main.c
     project/application/state/app_device_state.c
     project/application/led/app_led.c
+    project/application/task/app_motor_task.c
     project/application/task/app_led_task.c
     project/application/task/app_usb_task.c
     project/application/shell/app_shell.c
     project/application/shell/commands/cmd_console.c
     project/application/shell/commands/cmd_system.c
+    project/application/shell/commands/cmd_motor.c
     project/application/shell/commands/cmd_test.c
 
     # bsp 板级支持层
@@ -134,6 +137,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 set_source_files_properties(
     project/application/motor/app_motor.c
     project/application/motor/app_motor_diagnostics.c
+    project/application/motor/app_motor_runtime.c
     project/porting/stm32g4/dwt.c
     project/bsp/encoder/bsp_encoder.c
     project/driver/mt6826s/mt6826s_drv.c

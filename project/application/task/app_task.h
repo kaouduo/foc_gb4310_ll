@@ -32,6 +32,13 @@ extern "C" {
  *  @note   由 FreeRTOS 任务上下文调用；每 10 ms 更新硬件 PWM 占空比，其余时间阻塞，不执行 FOC 控制。
  */
 void App_LEDTask(void *argument);
+/**
+ * @brief 每 1 ms 调用电机监督流程。
+ * @param argument 预留参数，当前不使用。
+ * @return 不返回。
+ * @note FreeRTOS 任务；快速环在 ADC IRQ，长准备后跳过旧节拍。
+ */
+void App_MotorTask(void *argument);
 
 /** @brief 等待启动通知后处理 CDC Shell；单任务独占收发，栈静态分配 2048 B。 */
 void App_USBTask(void *argument);

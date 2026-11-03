@@ -39,15 +39,20 @@
 #define STARTUP_STACK_BYTES 2048U
 #define LED_STACK_BYTES 2048U
 #define USB_STACK_BYTES 2048U
+#define MOTOR_STACK_BYTES 2048U
+#define MOTOR_PRIORITY 3U
 #define USB_PRIORITY 2U
 #define STARTUP_PRIORITY 2U
 #define LED_PRIORITY 1U
 _Static_assert(STARTUP_STACK_BYTES % sizeof(StackType_t) == 0U, "Startup stack alignment");
+_Static_assert(MOTOR_STACK_BYTES % sizeof(StackType_t) == 0U, "Motor stack alignment");
 _Static_assert(LED_STACK_BYTES % sizeof(StackType_t) == 0U, "System stack alignment");
 
 static const App_LogPlatform logPlatform = {
         .lock = elog_port_output_lock, .unlock = elog_port_output_unlock, .inISR = Elog_Port_InISR};
 
+static StaticTask_t motorTaskControl;
+static StackType_t motorTaskStack[MOTOR_STACK_BYTES / sizeof(StackType_t)];
 static Sys_Status motorHardwareResult;
 static StaticTask_t usbTaskControl;
 static StackType_t usbTaskStack[USB_STACK_BYTES / sizeof(StackType_t)];
@@ -118,7 +123,10 @@ static void App_StartupTask(void *argument)
     if (motorResult != SYS_OK) {
         App_DeviceState_RaiseFault(SYSTEM_FAULT_STARTUP | SYSTEM_FAULT_POWER_STAGE);
     }
-
+    if (motorResult == SYS_OK) {
+        (void)xTaskCreateStatic(App_MotorTask, "motor", MOTOR_STACK_BYTES / sizeof(StackType_t), NULL, MOTOR_PRIORITY,
+                                motorTaskStack, &motorTaskControl);
+    }
     usbTaskHandle = xTaskCreateStatic(App_USBTask, "usb", USB_STACK_BYTES / sizeof(StackType_t), NULL, USB_PRIORITY,
                                       usbTaskStack, &usbTaskControl);
     App_USBOutput_Init(usbTaskHandle);

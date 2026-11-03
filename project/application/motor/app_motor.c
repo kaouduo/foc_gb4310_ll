@@ -8,7 +8,6 @@
 #include <math.h>
 #include <string.h>
 #include "app_motor_internal.h"
-#include "bsp_encoder.h"
 #include "bsp_motor.h"
 #include "bsp_platform.h"
 #include "foc_math.h"
@@ -20,7 +19,9 @@ App_MotorContext motor;
 /** @brief ADC IRQ 同步入口；只做有界计算，不调用 RTOS、日志、存储或动态内存。 */
 static void App_Motor_FastStep(void *context, const MotorSample *sample)
 {
-
+    if (App_Motor_RuntimeFastStep(sample)) {
+        return;
+    }
     App_MotorContext *self = context;
     if (!self->busy || self->collected >= self->target) {
         return;
@@ -60,13 +61,13 @@ Sys_Status App_Motor_Init(void)
     FOC_OpenVoltage_Bind(&motor.open);
     Sys_Status status = BSP_Motor.set_sample_callback(BSP_Motor.context, App_Motor_FastStep, &motor);
     motor.initialized = status == SYS_OK;
+    App_Motor_RuntimeInit();
     return status;
 }
 /** @brief 立即关闭输出并取消启动；采样由其所有者完成收尾。 */
 void App_Motor_Stop(void)
 {
-    motor.cancel_sampling = true;
-    BSP_Motor.disable_output(BSP_Motor.context);
+    App_Motor_RequestStop();
 }
 /** @brief 读取母线诊断值，运行期间只读监督任务缓存。 */
 Sys_Status App_Motor_ReadBus(uint16_t *raw, float *volts)
@@ -74,7 +75,13 @@ Sys_Status App_Motor_ReadBus(uint16_t *raw, float *volts)
     if (!motor.initialized) {
         return SYS_ERROR_NOT_READY;
     }
-
+    if (App_Motor_RuntimeBusy()) {
+        App_MotorRunSnapshot snapshot;
+        App_Motor_GetRunSnapshot(&snapshot);
+        *raw = snapshot.bus_raw;
+        *volts = snapshot.bus_v;
+        return snapshot.bus_v > 0.0f ? SYS_OK : SYS_ERROR_NOT_READY;
+    }
     Sys_Status status = BSP_Motor.read_bus(BSP_Motor.context, raw);
     if (status == SYS_OK) {
         *volts = *raw * BSP_Motor.scale->adc_reference_v * BSP_Motor.scale->bus_ratio / BSP_Motor.scale->counts;
@@ -121,7 +128,7 @@ Sys_Status App_Motor_Acquire(App_MotorTest test, App_MotorTestResult *out)
     }
     uint32_t start = BSP_Platform.timeMs();
     while (status == SYS_OK && motor.collected < motor.target) {
-        if (motor.cancel_sampling) {
+        if (motor.cancel_sampling || App_Motor_PreparationCancelled()) {
             status = SYS_ERROR_BUSY;
             break;
         }
@@ -204,9 +211,4 @@ Sys_Status App_Motor_PrepareZero(void)
 {
     App_MotorTestResult result;
     return App_Motor_Acquire(APP_MOTOR_TEST_ZERO, &result);
-}
-
-Sys_Status App_Motor_ReadEncoder(MT6826S_Sample *sample)
-{
-    return BSP_Encoder_Read(sample);
 }

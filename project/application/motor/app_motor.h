@@ -87,8 +87,99 @@ Sys_Status App_Motor_TestAlgorithms(uint32_t *checks);
  * @note 任务调用；不自动清除故障或重新运行。
  */
 void App_Motor_Stop(void);
-/** @brief 停机状态下读取一次编码器；只有 Shell 任务调用。 */
+typedef enum {
+    APP_MOTOR_IDLE,      /**< 空闲或已正常停机。 */
+    APP_MOTOR_QUEUED,    /**< 命令已接受，等待监督任务准备。 */
+    APP_MOTOR_PREPARING, /**< 关闭输出采集零偏并验证启动条件。 */
+    APP_MOTOR_OPEN,      /**< 开环执行器运行中，也用于校准电压输出。 */
+    APP_MOTOR_STOPPING,  /**< 输出已关闭，等待模式退出和采样收尾。 */
+    APP_MOTOR_FAULT      /**< 故障锁存，禁止自动重新启动。 */
+} App_MotorRunState;
+typedef enum {
+    APP_MOTOR_REASON_NONE,
+    APP_MOTOR_REASON_DONE,
+    APP_MOTOR_REASON_STOP,
+    APP_MOTOR_REASON_ZERO,
+    APP_MOTOR_REASON_SAMPLE,
+    APP_MOTOR_REASON_RAIL,
+    APP_MOTOR_REASON_CURRENT,
+    APP_MOTOR_REASON_UNDER_VOLTAGE,
+    APP_MOTOR_REASON_OVER_VOLTAGE,
+    APP_MOTOR_REASON_STALE,
+    APP_MOTOR_REASON_COMPUTE,
+    APP_MOTOR_REASON_DEADLINE,
+    APP_MOTOR_REASON_CALIBRATION
+} App_MotorReason;
+typedef struct {
+    float frequency_hz;   /**< 有符号电频率，单位 Hz，零表示固定磁场。 */
+    float voltage_v;      /**< 非负电压幅值请求，单位 V，按实时母线限幅。 */
+    uint32_t duration_ms; /**< 运行总时长，范围 100～10000 ms。 */
+    uint32_t ramp_ms;     /**< 上升/下降各自的斜坡时间，单位 ms，不超过总时长一半。 */
+} App_MotorOpenCommand;
+typedef struct {
+    App_MotorRunState state;
+    App_MotorReason reason;
+    Sys_Status status;
+    uint32_t faults;        /**< 本模块锁存的 System_Fault 位。 */
+    uint32_t frames;        /**< 已运行快速控制帧数。 */
+    uint32_t target_frames; /**< 本次最大控制帧数，不包含零偏准备。 */
+    uint32_t fault_frame;   /**< 首故障对应控制帧号。 */
+    uint32_t encoder_errors, bus_updates;
+    float bus_v;                     /**< 最近母线电压，单位 V。 */
+    float voltage_limit_v;           /**< 母线及调制范围对应幅值上限，单位 V。 */
+    float peak_current_a;            /**< 本次三相估算电流绝对值峰值，单位 A。 */
+    float applied_voltage_v;         /**< 最近开环 d 轴电压，单位 V。 */
+    float current_u_a;               /**< 最近 U 相反馈，单位 A。 */
+    float current_v_a;               /**< 最近 V 相反馈，单位 A。 */
+    float current_w_a;               /**< 最近重建 W 相反馈，单位 A，等于 -U-V。 */
+    int32_t mechanical_delta_counts; /**< 相对运行起点的展开编码器计数，32768 counts/圈。 */
+    uint16_t bus_raw;                /**< 最近母线 ADC 原始计数。 */
+    uint16_t encoder_raw;            /**< 最近有效 15 位编码器计数。 */
+    uint16_t fault_raw_u;            /**< 首故障 U 相 ADC 计数。 */
+    uint16_t fault_raw_v;            /**< 首故障 V 相 ADC 计数。 */
+    bool encoder_valid;              /**< 最近一次编码器读取是否成功。 */
+} App_MotorRunSnapshot;
+
+/**
+ * @brief 排队提交有限时间开环请求。
+ * @param command 电频率 Hz、幅值 V、持续时间和斜坡 ms。
+ * @return SYS_OK 仅表示接受；非法参数、忙或故障时拒绝。
+ * @note 任务调用，最大持续 10000 ms，实际启动由监督任务执行。
+ */
+Sys_Status App_Motor_RequestOpen(const App_MotorOpenCommand *command);
+/**
+ * @brief 取消启动请求并同步收尾已运行的模式。
+ * @return 无。
+ * @note 任务调用，立即关闭功率输出；准备期采样由采集所有者响应取消后收尾。
+ */
+void App_Motor_RequestStop(void);
+/**
+ * @brief 在停止且母线有效时显式清除本模块故障。
+ * @return SYS_OK、BUSY、NOT_READY 或母线读取错误。
+ * @note 任务调用，保持停止，不自动恢复运行。
+ */
+Sys_Status App_Motor_ClearFault(void);
+/**
+ * @brief 复制运行或上次停机的遥测快照。
+ * @param snapshot 一致快照输出。
+ * @return 无。
+ * @note 任务调用，空闲时物理量可能是上次冻结值。
+ */
+void App_Motor_GetRunSnapshot(App_MotorRunSnapshot *snapshot);
+/**
+ * @brief 推进准备、保护、校准与停机保存。
+ * @return 无。
+ * @note 仅唯一 1 ms 电机监督任务调用，Shell 不得并发执行。
+ */
+void App_Motor_Process(void);
+/**
+ * @brief 读取编码器样本，准备或运行时只读缓存。
+ * @param sample 成功时写入编码器样本。
+ * @return SYS_OK 或缓存/器件读取错误。
+ * @note 任务调用；空闲时直接访问编码器 SPI。
+ */
 Sys_Status App_Motor_ReadEncoder(MT6826S_Sample *sample);
+
 #ifdef __cplusplus
 }
 #endif

@@ -109,11 +109,45 @@ Sys_Status App_Motor_TestAlgorithms(uint32_t *checks)
 }
 #endif
 
-/** @brief 关闭功率输出的采样检查；本阶段不提供带电 PWM 测试。 */
+/** @brief Shell 任务调用；带电测试由监督任务执行，调用者仅等待并读取快照。 */
 Sys_Status App_Motor_Test(App_MotorTest test, App_MotorTestResult *out)
 {
     memset(out, 0, sizeof(*out));
-#if !FOC_ENABLE_MOTOR_DIAGNOSTICS
+    if (App_Motor_RuntimeBusy() || motor.busy) {
+        return SYS_ERROR_BUSY;
+    }
+#if FOC_ENABLE_MOTOR_DIAGNOSTICS
+    if (test >= APP_MOTOR_TEST_PWM_U && test <= APP_MOTOR_TEST_PWM_ALL) {
+        uint32_t start = BSP_Platform.timeMs();
+        Sys_Status status = App_Motor_RequestPWM(test);
+        if (status != SYS_OK) {
+            return status;
+        }
+        while (App_Motor_RuntimeBusy()) {
+            if (BSP_Platform.timeMs() - start > 1500U) {
+                App_Motor_Stop();
+                status = SYS_ERROR_TIMEOUT;
+                break;
+            }
+            (void)BSP_Platform.delayMs(1U);
+        }
+        App_MotorRunSnapshot snapshot;
+        App_Motor_GetRunSnapshot(&snapshot);
+        BSP_Motor.snapshot(BSP_Motor.context, &out->hardware);
+        out->collected = snapshot.frames;
+        out->elapsed_ms = BSP_Platform.timeMs() - start;
+        out->bus_v = snapshot.bus_v;
+        out->zero_valid = motor.zero_valid;
+        out->offset_u = motor.offset_u;
+        out->offset_v = motor.offset_v;
+        out->current_u_a = snapshot.current_u_a;
+        out->current_v_a = snapshot.current_v_a;
+        if (status == SYS_OK && snapshot.reason != APP_MOTOR_REASON_DONE && snapshot.status == SYS_OK) {
+            status = SYS_ERROR_BUSY;
+        }
+        return status != SYS_OK ? status : snapshot.status;
+    }
+#else
     if (test != APP_MOTOR_TEST_CURRENT && test != APP_MOTOR_TEST_ZERO) {
         return SYS_ERROR_PARAM;
     }
