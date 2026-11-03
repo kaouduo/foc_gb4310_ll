@@ -20,6 +20,7 @@
 #define APP_USB_TASK_START (1UL << 16)
 
 /* 对外保持 C 链接，允许 C++ 业务直接包含并调用。 */
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -24,6 +24,7 @@ static MT6826S encoder;
 static MT6826S_SPI endpoint = {.busy = ATOMIC_FLAG_INIT};
 static const MT6826S_SPI_Config config = {
         .spi = BSP_BOARD_ENCODER_SPI,
+        .baudPrescaler = BSP_BOARD_ENCODER_SPI_PRESCALER,
         .spiClock = LL_APB2_GRP1_PERIPH_SPI1,
         .gpioClocks = LL_AHB2_GRP1_PERIPH_GPIOA | LL_AHB2_GRP1_PERIPH_GPIOC,
         .pins = {{BSP_BOARD_ENCODER_SCK_PORT, BSP_BOARD_ENCODER_SCK_PIN, BSP_BOARD_ENCODER_SCK_AF},
@@ -52,7 +53,10 @@ Sys_Status BSP_Encoder_Init(void)
  *  @return SYS_OK 表示本次样本有效；其他负值表示忙、通信或协议错误。
  *  @note   初始化完成后供未来控制中断或 shell 显式调用；失败保留原输出，当前不安排自动采样。
  */
-Sys_Status BSP_Encoder_Read(MT6826S_Sample *sample) { return MT6826S_Read(&encoder, sample); }
+Sys_Status BSP_Encoder_Read(MT6826S_Sample *sample)
+{
+    return MT6826S_Read(&encoder, sample);
+}
 /**
  *  @brief  按需读取编码器诊断寄存器。
  *  @param  address 有效的 12 位寄存器地址。

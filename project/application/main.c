@@ -20,18 +20,17 @@
 #include "FreeRTOS.h"
 #include "app_device_state.h"
 #include "app_log.h"
+#include "app_motor.h"
 #include "app_task.h"
 #include "app_usb_task.h"
 #include "bsp_encoder.h"
 #include "bsp_internal_flash.h"
 #include "bsp_led.h"
+#include "bsp_motor.h"
 #include "bsp_platform.h"
 #include "bsp_usb_cdc.h"
-#include "bus_voltage_stm32.h"
-#include "current_sampling_stm32.h"
 #include "dwt.h"
 #include "elog_port.h"
-#include "pwm_output_stm32.h"
 #include "system_clock.h"
 #include "task.h"
 #include "uart_stm32.h"
@@ -49,18 +48,19 @@ _Static_assert(LED_STACK_BYTES % sizeof(StackType_t) == 0U, "System stack alignm
 static const App_LogPlatform logPlatform = {
         .lock = elog_port_output_lock, .unlock = elog_port_output_unlock, .inISR = Elog_Port_InISR};
 
+static Sys_Status motorHardwareResult;
 static StaticTask_t usbTaskControl;
 static StackType_t usbTaskStack[USB_STACK_BYTES / sizeof(StackType_t)];
 static TaskHandle_t usbTaskHandle;
 static StaticTask_t ledTaskControl;
 static StackType_t ledTaskStack[LED_STACK_BYTES / sizeof(StackType_t)];
-
 /** @brief 启动结果供调试器观察；未就绪、成功或具体失败码。 */
 volatile Sys_Status appStartupResult = SYS_ERROR_NOT_READY;
 
 /** @brief 累计 USB 事件位，仅 IRQ 更新，供调试器观察；实际任务唤醒使用通知位。 */
 volatile uint32_t appUsbEvents;
 
+/** @brief 在 USB IRQ 累计事件并通知唯一 USB 任务。 */
 static void App_USBEvent(uint32_t events, void *context)
 {
     (void)context;
@@ -73,15 +73,16 @@ static void App_USBEvent(uint32_t events, void *context)
 /**
  *  @brief  准备调度器启动前的各模块板级 IO。
  *  @param  无。
- *  @return 无返回值；当前各模块 IO 接口不报告错误，LED 此处仅绑定对象。
- *  @note   平台时钟和 DWT 初始化成功后调用一次；不重复配置系统基础资源，不等待设备应答或调用任务延时。
+ *  @return 无返回值；电机初始化结果保存在 motorHardwareResult，LED 此处仅绑定对象。
+ *  @note   平台时钟和 DWT 初始化成功后调用一次；不重复配置系统基础资源；ADC 校准/就绪使用有界 DWT
+ * 轮询，不调用任务延时。
  */
 static void Board_IO_Init(void)
 {
-    PWM_Output_BoardIO_Init();
+    BSP_Motor_Bind();
+    /* 调度前配置安全 GPIO/关闭输出并校准 ADC；不启动采样。 */
+    motorHardwareResult = BSP_Motor.init(BSP_Motor.context);
     UART_BoardIO_Init();
-    CurrentSampling_BoardIO_Init();
-    BusVoltage_BoardIO_Init();
     BSP_LED_Bind();
 }
 
@@ -109,6 +110,15 @@ static void App_StartupTask(void *argument)
         LOG_E("flash", "Initialization failed status=%d", (int)flashResult);
         App_DeviceState_RaiseFault(SYSTEM_FAULT_STARTUP | SYSTEM_FAULT_STORAGE);
     }
+    Sys_Status motorResult = motorHardwareResult;
+    if (motorResult == SYS_OK) {
+        motorResult = App_Motor_Init();
+    }
+    LOG_I("boot", "Motor hardware bind/init status=%d output=off", (int)motorResult);
+    if (motorResult != SYS_OK) {
+        App_DeviceState_RaiseFault(SYSTEM_FAULT_STARTUP | SYSTEM_FAULT_POWER_STAGE);
+    }
+
     usbTaskHandle = xTaskCreateStatic(App_USBTask, "usb", USB_STACK_BYTES / sizeof(StackType_t), NULL, USB_PRIORITY,
                                       usbTaskStack, &usbTaskControl);
     App_USBOutput_Init(usbTaskHandle);
@@ -123,11 +133,13 @@ static void App_StartupTask(void *argument)
     if (usbResult != SYS_OK) {
         App_DeviceState_RaiseFault(SYSTEM_FAULT_STARTUP | SYSTEM_FAULT_INTERNAL);
     }
-    if (encoderResult == SYS_OK && flashResult == SYS_OK && usbResult == SYS_OK) {
+    if (encoderResult == SYS_OK && flashResult == SYS_OK && usbResult == SYS_OK && motorResult == SYS_OK) {
         App_DeviceState_Set(SYSTEM_STATE_STANDBY);
     }
     /* 保留首次失败码；故障位同时保存全部失败来源。 */
-    appStartupResult = encoderResult != SYS_OK ? encoderResult : (flashResult != SYS_OK ? flashResult : usbResult);
+    appStartupResult = encoderResult != SYS_OK
+            ? encoderResult
+            : (flashResult != SYS_OK ? flashResult : (motorResult != SYS_OK ? motorResult : usbResult));
     LOG_I("system", "Startup status=%d", (int)appStartupResult);
     LOG_D("system", "Debug logging enabled");
     /* 初始化结果发布后才启动指示任务，初始化期间保持驱动默认熄灭。 */

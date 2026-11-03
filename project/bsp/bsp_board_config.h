@@ -4,6 +4,7 @@
 #include "stm32g4xx_ll_adc.h"
 #include "stm32g4xx_ll_bus.h"
 #include "stm32g4xx_ll_gpio.h"
+#include "stm32g4xx_ll_spi.h"
 #include "stm32g4xx_ll_tim.h"
 
 /* 主控模块：REV6 板卡，STM32G431CBU6。 */
@@ -12,6 +13,11 @@
 
 /* 三相 PWM 模块：TIM1 主输出及互补输出，按物理通道编号排列。 */
 #define BSP_BOARD_PWM_TIMER TIM1              /* 三相主输出与互补输出共用的定时器。 */
+#define BSP_BOARD_MOTOR_PWM_HZ 20000U         /**< PWM 与同步注入采样频率，单位 Hz。 */
+#define BSP_BOARD_MOTOR_DEADTIME_NS 300U      /**< 互补输出死区，单位 ns。 */
+#define BSP_BOARD_MOTOR_IRQ_PRIORITY 4U       /**< ADC 与 TIM1 更新 IRQ 优先级，禁止调用 RTOS。 */
+#define BSP_BOARD_MOTOR_DUTY_MIN 0.05f        /**< 三相占空比下限。 */
+#define BSP_BOARD_MOTOR_DUTY_MAX 0.95f        /**< 三相占空比上限。 */
 #define BSP_BOARD_PWM_CH1_PORT GPIOA          /* 第 1 相主输出端口。 */
 #define BSP_BOARD_PWM_CH1_PIN LL_GPIO_PIN_8   /* 第 1 相主输出引脚。 */
 #define BSP_BOARD_PWM_CH1_AF LL_GPIO_AF_6     /* 第 1 相主输出复用编号。 */
@@ -33,18 +39,19 @@
 #define BSP_BOARD_PWM_CH3N_AF LL_GPIO_AF_4    /* 第 3 相互补输出复用编号。 */
 
 /* 编码器模块：SPI1 通信，PC4 软件片选，低电平选中。 */
-#define BSP_BOARD_ENCODER_SPI SPI1               /* 磁编码器使用的 SPI 外设。 */
-#define BSP_BOARD_ENCODER_SCK_PORT GPIOA         /* 编码器SPI 时钟端口。 */
-#define BSP_BOARD_ENCODER_SCK_PIN LL_GPIO_PIN_5  /* 编码器SPI 时钟引脚。 */
-#define BSP_BOARD_ENCODER_SCK_AF LL_GPIO_AF_5    /* 编码器SPI 时钟复用编号。 */
-#define BSP_BOARD_ENCODER_MISO_PORT GPIOA        /* 编码器SPI 从机输出端口。 */
-#define BSP_BOARD_ENCODER_MISO_PIN LL_GPIO_PIN_6 /* 编码器SPI 从机输出引脚。 */
-#define BSP_BOARD_ENCODER_MISO_AF LL_GPIO_AF_5   /* 编码器SPI 从机输出复用编号。 */
-#define BSP_BOARD_ENCODER_MOSI_PORT GPIOA        /* 编码器SPI 主机输出端口。 */
-#define BSP_BOARD_ENCODER_MOSI_PIN LL_GPIO_PIN_7 /* 编码器SPI 主机输出引脚。 */
-#define BSP_BOARD_ENCODER_MOSI_AF LL_GPIO_AF_5   /* 编码器SPI 主机输出复用编号。 */
-#define BSP_BOARD_ENCODER_CS_PORT GPIOC          /* 编码器低有效片选端口。 */
-#define BSP_BOARD_ENCODER_CS_PIN LL_GPIO_PIN_4   /* 编码器低有效片选引脚。 */
+#define BSP_BOARD_ENCODER_SPI_PRESCALER LL_SPI_BAUDRATEPRESCALER_DIV16 /* 170 MHz /16 = 10.625 MHz */
+#define BSP_BOARD_ENCODER_SPI SPI1                                     /* 磁编码器使用的 SPI 外设。 */
+#define BSP_BOARD_ENCODER_SCK_PORT GPIOA                               /* 编码器SPI 时钟端口。 */
+#define BSP_BOARD_ENCODER_SCK_PIN LL_GPIO_PIN_5                        /* 编码器SPI 时钟引脚。 */
+#define BSP_BOARD_ENCODER_SCK_AF LL_GPIO_AF_5                          /* 编码器SPI 时钟复用编号。 */
+#define BSP_BOARD_ENCODER_MISO_PORT GPIOA                              /* 编码器SPI 从机输出端口。 */
+#define BSP_BOARD_ENCODER_MISO_PIN LL_GPIO_PIN_6                       /* 编码器SPI 从机输出引脚。 */
+#define BSP_BOARD_ENCODER_MISO_AF LL_GPIO_AF_5                         /* 编码器SPI 从机输出复用编号。 */
+#define BSP_BOARD_ENCODER_MOSI_PORT GPIOA                              /* 编码器SPI 主机输出端口。 */
+#define BSP_BOARD_ENCODER_MOSI_PIN LL_GPIO_PIN_7                       /* 编码器SPI 主机输出引脚。 */
+#define BSP_BOARD_ENCODER_MOSI_AF LL_GPIO_AF_5                         /* 编码器SPI 主机输出复用编号。 */
+#define BSP_BOARD_ENCODER_CS_PORT GPIOC                                /* 编码器低有效片选端口。 */
+#define BSP_BOARD_ENCODER_CS_PIN LL_GPIO_PIN_4                         /* 编码器低有效片选引脚。 */
 
 /* 调试串口模块：USART3，PC10 发送、PC11 接收。 */
 #define BSP_BOARD_DEBUG_UART USART3           /* 调试串口外设。 */

@@ -57,6 +57,9 @@ Sys_Status System_Clock_Init(void)
         }
     }
 
+    /* 实时控制使用 Flash 指令预取；保持现有指令/数据缓存启用状态。 */
+    LL_FLASH_EnablePrefetch();
+
     /** 启用 HSI 振荡器。 */
     LL_RCC_HSI_Enable();
     timeout = CLOCK_WAIT_LIMIT;

@@ -28,7 +28,7 @@ _Static_assert(ATOMIC_BOOL_LOCK_FREE == 2, "Encoder requires lock-free atomic fl
  *  @brief  复位并配置专用 SPI 外设。
  *  @param  self 已保存板级配置的端点。
  *  @return 无返回值。
- *  @note   仅初始化或持有事务的错误恢复路径调用；清空 FIFO 和错误标志，模式 3、8 位、MSB 优先、32 分频。
+ *  @note   仅初始化或持有事务的错误恢复路径调用；清空 FIFO 和错误标志，模式 3、8 位、MSB 优先、板级配置分频。
  */
 static void ConfigureSPI(MT6826S_SPI *self)
 {
@@ -41,7 +41,7 @@ static void ConfigureSPI(MT6826S_SPI *self)
     LL_SPI_SetClockPolarity(spi, LL_SPI_POLARITY_HIGH);
     LL_SPI_SetClockPhase(spi, LL_SPI_PHASE_2EDGE);
     LL_SPI_SetNSSMode(spi, LL_SPI_NSS_SOFT);
-    LL_SPI_SetBaudRatePrescaler(spi, LL_SPI_BAUDRATEPRESCALER_DIV32);
+    LL_SPI_SetBaudRatePrescaler(spi, self->config.baudPrescaler);
     LL_SPI_SetTransferBitOrder(spi, LL_SPI_MSB_FIRST);
     LL_SPI_DisableCRC(spi);
     LL_SPI_SetRxFIFOThreshold(spi, LL_SPI_RX_FIFO_TH_QUARTER);
@@ -53,7 +53,7 @@ static void ConfigureSPI(MT6826S_SPI *self)
  *  @param  self 静态通信端点。
  *  @param  config 板级有效配置，按值复制。
  *  @return 无返回值。
- *  @note   平台时钟和 DWT 就绪后调用一次；SPI1 专用，模式 3、8 位、32 分频，不发送器件命令。
+ *  @note   平台时钟和 DWT 就绪后调用一次；SPI1 专用，模式 3、8 位、板级配置分频，不发送器件命令。
  */
 void MT6826S_SPI_Init(MT6826S_SPI *self, const MT6826S_SPI_Config *config)
 {
@@ -73,10 +73,11 @@ void MT6826S_SPI_Init(MT6826S_SPI *self, const MT6826S_SPI_Config *config)
         LL_GPIO_SetPinOutputType(pin->port, pin->pin, LL_GPIO_OUTPUT_PUSHPULL);
         LL_GPIO_SetPinSpeed(pin->port, pin->pin, LL_GPIO_SPEED_FREQ_HIGH);
         LL_GPIO_SetPinPull(pin->port, pin->pin, LL_GPIO_PULL_NO);
-        if (pin->pin <= LL_GPIO_PIN_7)
+        if (pin->pin <= LL_GPIO_PIN_7) {
             LL_GPIO_SetAFPin_0_7(pin->port, pin->pin, pin->alternate);
-        else
+        } else {
             LL_GPIO_SetAFPin_8_15(pin->port, pin->pin, pin->alternate);
+        }
         LL_GPIO_SetPinMode(pin->port, pin->pin, LL_GPIO_MODE_ALTERNATE);
     }
     /* 芯片上电典型需要 3 ms；留 5 ms 后才允许后续主动读取，不以此判定在线。 */
@@ -96,12 +97,15 @@ static Sys_Status WaitFlag(SPI_TypeDef *spi, uint32_t mask, uint32_t value, uint
 {
     for (;;) {
         uint32_t status = spi->SR;
-        if ((status & (SPI_SR_OVR | SPI_SR_MODF | SPI_SR_FRE)) != 0U)
+        if ((status & (SPI_SR_OVR | SPI_SR_MODF | SPI_SR_FRE)) != 0U) {
             return SYS_ERROR_IO;
-        if ((status & mask) == value)
+        }
+        if ((status & mask) == value) {
             return SYS_OK;
-        if (DWT_ElapsedUs(start) >= TRANSFER_TIMEOUT_US)
+        }
+        if (DWT_ElapsedUs(start) >= TRANSFER_TIMEOUT_US) {
             return SYS_ERROR_TIMEOUT;
+        }
     }
 }
 
@@ -117,29 +121,42 @@ static Sys_Status WaitFlag(SPI_TypeDef *spi, uint32_t mask, uint32_t value, uint
 Sys_Status MT6826S_SPI_Transfer(void *context, const uint8_t *tx, uint8_t *rx, uint16_t size)
 {
     MT6826S_SPI *self = context;
-    if (atomic_flag_test_and_set_explicit(&self->busy, memory_order_acquire))
+    if (atomic_flag_test_and_set_explicit(&self->busy, memory_order_acquire)) {
         return SYS_ERROR_BUSY;
+    }
     SPI_TypeDef *spi = self->config.spi;
     uint32_t start = DWT_Cycles();
     Sys_Status result = SYS_OK;
     LL_GPIO_ResetOutputPin(self->config.csPort, self->config.csPin);
     (void)DWT_DelayUs(1U);
-    for (uint16_t i = 0; i < size; ++i) {
-        result = WaitFlag(spi, SPI_SR_TXE, SPI_SR_TXE, start);
-        if (result != SYS_OK)
+    /* 同一 CS 内以最多两个未接收字节流水收发，避免逐字节软件间隙；不改变 SPI 频率。 */
+    uint16_t sent = 0U, received = 0U;
+    uint32_t budget = (SystemCoreClock / 1000000U) * TRANSFER_TIMEOUT_US;
+    while (received < size) {
+        uint32_t flags = spi->SR;
+        if (flags & (SPI_SR_OVR | SPI_SR_MODF | SPI_SR_FRE)) {
+            result = SYS_ERROR_IO;
             break;
-        LL_SPI_TransmitData8(spi, tx[i]);
-        result = WaitFlag(spi, SPI_SR_RXNE, SPI_SR_RXNE, start);
-        if (result != SYS_OK)
+        }
+        if (flags & SPI_SR_RXNE) {
+            rx[received++] = LL_SPI_ReceiveData8(spi);
+        }
+        if (sent < size && (uint16_t)(sent - received) < 2U && (flags & SPI_SR_TXE)) {
+            LL_SPI_TransmitData8(spi, tx[sent++]);
+        }
+        if ((uint32_t)(DWT->CYCCNT - start) >= budget) {
+            result = SYS_ERROR_TIMEOUT;
             break;
-        rx[i] = LL_SPI_ReceiveData8(spi);
+        }
     }
-    if (result == SYS_OK)
+    if (result == SYS_OK) {
         result = WaitFlag(spi, SPI_SR_BSY, 0U, start);
+    }
     (void)DWT_DelayUs(1U);
     LL_GPIO_SetOutputPin(self->config.csPort, self->config.csPin);
-    if (result != SYS_OK)
+    if (result != SYS_OK) {
         ConfigureSPI(self);
+    }
     (void)DWT_DelayUs(1U);
     atomic_flag_clear_explicit(&self->busy, memory_order_release);
     return result;

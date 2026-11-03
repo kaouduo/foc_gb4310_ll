@@ -6,6 +6,7 @@
  */
 #include "app_shell.h"
 #include <string.h>
+#include "app_motor.h"
 #include "csh.h"
 
 static chry_shell_t shell;
@@ -51,7 +52,14 @@ static uint8_t Complete(chry_readline_t *rl, char *pre, uint16_t *size, const ch
         return defaultCompletion(rl, pre, size, argv, argl, maximum);
     }
     static const char *const system[] = {"uid", "time"};
-    static const char *const test[] = {"enc"};
+    static const char *const test[] = {
+            "enc",  "bus",   "current", "zero", "motor", "stop",
+#if FOC_ENABLE_MOTOR_DIAGNOSTICS
+            "sync", "chain", "foc",
+#endif
+    };
+#if FOC_ENABLE_MOTOR_DIAGNOSTICS
+#endif
     const char *const *candidates = NULL;
     uint8_t count = 0U;
     if (wordCount == 2U && lengths[0] == 6U && memcmp(words[0], "system", 6U) == 0) {
@@ -59,7 +67,9 @@ static uint8_t Complete(chry_readline_t *rl, char *pre, uint16_t *size, const ch
         count = 2U;
     } else if (wordCount == 2U && lengths[0] == 4U && memcmp(words[0], "test", 4U) == 0) {
         candidates = test;
-        count = 1U;
+        count = sizeof(test) / sizeof(test[0]);
+#if FOC_ENABLE_MOTOR_DIAGNOSTICS
+#endif
     }
 #if defined(FOC_LOG_DEBUG_BUILD)
     static const char *const logCommands[] = {"level", "color", "stats"};
@@ -263,10 +273,22 @@ void App_Shell_Feed(uint8_t byte)
     }
 }
 
-bool App_Shell_OutputFailed(void) { return outputFailed; }
-App_USBAction App_Shell_PendingAction(void) { return pendingAction; }
-void App_Shell_RequestClear(void) { clearRequested = true; }
-void App_Shell_RequestAction(App_USBAction action) { pendingAction = action; }
+bool App_Shell_OutputFailed(void)
+{
+    return outputFailed;
+}
+App_USBAction App_Shell_PendingAction(void)
+{
+    return pendingAction;
+}
+void App_Shell_RequestClear(void)
+{
+    clearRequested = true;
+}
+void App_Shell_RequestAction(App_USBAction action)
+{
+    pendingAction = action;
+}
 
 /* 不修改行缓冲、历史和 escape 分包状态，只操作终端显示。 */
 bool App_Shell_BeforeLog(void)

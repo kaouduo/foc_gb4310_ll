@@ -1,29 +1,58 @@
 /**
- *  @file   pwm_output_stm32.h
- *  @brief  提供三相 PWM 输出引脚的板级 IO 初始化。
- *  @author kaouduo
- *  @date   2026/10/30
- *  @version V1.0
+ * @file pwm_output_stm32.h
+ * @brief 三相输出能力，不重复初始化 TIM1。
  *
- *  @par 文件所属
- *  porting / pwm_output
- *
- *  @par 修改记录
- *
- *  日期 | 作者 | 版本 | 说明
- *  --- | --- | --- | ---
- *  2026/10/30 | kaouduo | V1.0 | 按工程规范统一中文注释和代码格式，保持原有逻辑。
+ * @author kaouduo
+ * @date 2026/10/31
  */
-
 #ifndef PWM_OUTPUT_STM32_H
 #define PWM_OUTPUT_STM32_H
+#include "motor_io.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 /**
- *  @brief  配置 TIM1 三相主输出和互补输出的 GPIO 复用。
- *  @param  无。
- *  @return 无返回值。
- *  @note   启动阶段且 TIM1 输出关闭时调用；使能 GPIO 时钟并修改六路引脚配置，不启动 PWM；无失败状态返回。
+ * @brief 原子更新三相占空比预装载值。
+ * @param context 已初始化的 MotorSTM32 实例。
+ * @param u 逻辑 U 相占空比。
+ * @param v 逻辑 V 相占空比。
+ * @param w 逻辑 W 相占空比。
+ * @return SYS_OK；占空比越界或更新截止错误时关断输出。
+ * @note 任务或 ADC IRQ 可用，仅修正浮点舍入，不裁剪真实越界请求。
  */
-void PWM_Output_BoardIO_Init(void);
+Sys_Status PWM_Output_Write(void *context, float u, float v, float w);
+/**
+ * @brief 按有限 PWM 周期数使能三相输出。
+ * @param context 已开始同步采样且无硬件错误的实例。
+ * @param periods 完整周期数，范围 1～90*pwm_hz。
+ * @return SYS_OK、PARAM、NOT_READY 或 BUSY。
+ * @note 任务调用，不检查业务零偏与电流；调用方必须已建立保护。
+ */
+Sys_Status PWM_Output_Enable(void *context, uint32_t periods);
+/**
+ * @brief 按最多一秒的租期使能诊断输出。
+ * @param context 已开始同步采样的实例。
+ * @param periods 完整周期数，不超过 pwm_hz。
+ * @return SYS_OK 或参数/硬件状态错误。
+ * @note 任务调用，时长限制不代替电流保护。
+ */
+Sys_Status PWM_Output_EnableTest(void *context, uint32_t periods);
+/**
+ * @brief 清除 MOE、相输出 CCER 和剩余周期。
+ * @param context 已绑定的静态实例。
+ * @return 无。
+ * @note 任务或 IRQ 均可调用，不等待，不停止 ADC 采样。
+ */
+void PWM_Output_Disable(void *context);
+/**
+ * @brief 直接关断 TIM1 功率输出，不依赖上下文。
+ * @return 无。
+ * @note 任务、IRQ 或断言路径可用；不更新业务状态，不停止采样。
+ */
+void PWM_Output_EmergencyOff(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

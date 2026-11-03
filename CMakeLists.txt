@@ -4,6 +4,8 @@ project(foc_gb4310_ll LANGUAGES C CXX ASM)
 
 add_executable(${PROJECT_NAME}
     # application 应用层
+    project/application/motor/app_motor.c
+    project/application/motor/app_motor_diagnostics.c
     project/application/main.c
     project/application/state/app_device_state.c
     project/application/led/app_led.c
@@ -15,6 +17,7 @@ add_executable(${PROJECT_NAME}
     project/application/shell/commands/cmd_test.c
 
     # bsp 板级支持层
+    project/bsp/motor/bsp_motor.c
     project/bsp/platform/bsp_platform.c
     project/bsp/platform/bsp_internal_flash.c
     project/bsp/encoder/bsp_encoder.c
@@ -37,8 +40,8 @@ add_executable(${PROJECT_NAME}
     project/porting/pwm_output/pwm_output_stm32.c
     project/porting/mt6826s/mt6826s_spi.c
     project/porting/uart/uart_stm32.c
-    project/porting/current_sampling/current_sampling_stm32.c
-    project/porting/adc_regular/bus_voltage_stm32.c
+    project/porting/motor_sampling/motor_sampling_stm32.c
+    project/porting/stm32g4/motor_fault_shutdown.S
     project/porting/led/led_gpio.c
     project/porting/led/led_pwm.c
     project/porting/freertos/freertos_hooks.c
@@ -54,11 +57,17 @@ add_executable(${PROJECT_NAME}
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     STM32G431xx
+    FOC_ENABLE_MOTOR_DIAGNOSTICS=$<IF:$<CONFIG:Debug>,1,0>
     FOC_HW_REV=6
     USER_VECT_TAB_ADDRESS
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
+    project/application/motor
+    project/middleware/control
+    project/middleware/foc
+    project/bsp/motor
+    project/porting/motor_sampling
     project/application
     project/application/task
     project/application/shell
@@ -80,8 +89,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     project/porting/mt6826s
     project/bsp/encoder
     project/porting/uart
-    project/porting/current_sampling
-    project/porting/adc_regular
     project/porting/led
     project/middleware/third_party/CMSIS/Include
     project/middleware/third_party/CMSIS/Device/ST/STM32G4xx/Include
@@ -109,3 +116,38 @@ target_link_libraries(${PROJECT_NAME} PRIVATE freertos_kernel cherryusb_device c
 
 # 输出文件生成、链接脚本依赖及基础库集中在 cmake 目录。
 include(cmake/firmware.cmake)
+
+# 本工程独立控制算法与模式，禁止引入 BSP/LL/RTOS。
+target_sources(${PROJECT_NAME} PRIVATE
+    project/middleware/control/pi.c
+    project/middleware/control/ramp.c
+    project/middleware/foc/foc_math.c
+    project/middleware/foc/foc_transform.c
+    project/middleware/foc/foc_svpwm.c
+    project/middleware/foc/foc_base.c
+    project/middleware/foc/foc_open_voltage.c
+    project/middleware/foc/foc_encoder_voltage.c
+    project/middleware/foc/foc_current.c
+)
+
+# 实板证据：O0 实时全链路超过 50 us。控制路径在 Debug 仍保留 g3/日志，但用 O2 保证截止时间。
+set_source_files_properties(
+    project/application/motor/app_motor.c
+    project/application/motor/app_motor_diagnostics.c
+    project/porting/stm32g4/dwt.c
+    project/bsp/encoder/bsp_encoder.c
+    project/driver/mt6826s/mt6826s_drv.c
+    project/porting/mt6826s/mt6826s_spi.c
+    project/porting/motor_sampling/motor_sampling_stm32.c
+    project/porting/pwm_output/pwm_output_stm32.c
+    project/middleware/control/pi.c
+    project/middleware/control/ramp.c
+    project/middleware/foc/foc_math.c
+    project/middleware/foc/foc_transform.c
+    project/middleware/foc/foc_svpwm.c
+    project/middleware/foc/foc_base.c
+    project/middleware/foc/foc_open_voltage.c
+    project/middleware/foc/foc_encoder_voltage.c
+    project/middleware/foc/foc_current.c
+    PROPERTIES COMPILE_OPTIONS -O2
+)

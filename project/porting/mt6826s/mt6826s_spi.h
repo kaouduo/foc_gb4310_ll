@@ -31,6 +31,7 @@ typedef struct {
 /** @brief BSP 提供的 SPI1 专用硬件配置。 */
 typedef struct {
     SPI_TypeDef *spi;        /*!< 本实现仅使用 SPI1。 */
+    uint32_t baudPrescaler;  /*!< BSP 指定分频，REV6 为 /16。 */
     uint32_t spiClock;       /*!< SPI1 对应 APB2 时钟及复位掩码。 */
     uint32_t gpioClocks;     /*!< 所有端口的 AHB2 时钟掩码。 */
     MT6826S_SPI_Pin pins[3]; /*!< 顺序为 SCK、MISO、MOSI。 */
@@ -49,7 +50,7 @@ typedef struct {
  *  @param  self 静态通信端点。
  *  @param  config 板级有效配置，按值复制。
  *  @return 无返回值。
- *  @note   平台时钟和 DWT 就绪后调用一次；SPI1 专用，模式 3、8 位、32 分频，不发送器件命令。
+ *  @note   平台时钟和 DWT 就绪后调用一次；SPI1 专用，模式 3、8 位、板级配置分频，不发送器件命令。
  */
 void MT6826S_SPI_Init(MT6826S_SPI *self, const MT6826S_SPI_Config *config);
 

@@ -33,25 +33,25 @@
 #define configUSE_TICKLESS_IDLE 0                             /* 关闭无节拍低功耗模式。 */
 #define configSUPPORT_STATIC_ALLOCATION 1                     /* 允许静态创建任务和内核对象。 */
 #define configSUPPORT_DYNAMIC_ALLOCATION 1                    /* 允许从 RTOS 堆动态创建任务和对象。 */
-/* 与参考 HAL 工程一致，heap_4 管理独立的 16 KB RTOS 堆。 */
-#define configTOTAL_HEAP_SIZE (16U * 1024U) /* RTOS 动态堆容量为 16 KB。 */
+/* heap_4 管理 8 KB RTOS 堆，启动任务动态分配并由 idle 回收。 */
+#define configTOTAL_HEAP_SIZE (8U * 1024U) /* RTOS 动态堆容量为 8 KB。 */
 #define INCLUDE_xTaskGetSchedulerState 1
-#define configUSE_MUTEXES 1                 /* 启用带优先级继承的互斥量。 */
-#define configUSE_RECURSIVE_MUTEXES 0       /* 关闭递归互斥量。 */
-#define configUSE_COUNTING_SEMAPHORES 1     /* 启用计数信号量。 */
-#define configQUEUE_REGISTRY_SIZE 8         /* 调试注册表最多保存 8 个内核对象。 */
-#define configUSE_TIMERS 1                  /* 启用软件定时器服务。 */
-#define configTIMER_TASK_PRIORITY 1U        /* 定时器服务任务优先级为 1。 */
-#define configTIMER_QUEUE_LENGTH 8U         /* 定时器命令队列最多保存 8 条命令。 */
-#define configTIMER_TASK_STACK_DEPTH 256U   /* 定时器任务栈为 256 个栈元素，即 1024 字节。 */
-#define configUSE_NEWLIB_REENTRANT 0        /* 不为每个任务单独分配 Newlib 重入结构。 */
-#define configUSE_IDLE_HOOK 0               /* 关闭用户空闲任务钩子。 */
-#define configUSE_TICK_HOOK 0               /* 关闭用户 tick 中断钩子。 */
-#define configCHECK_FOR_STACK_OVERFLOW 2    /* 启用二级任务栈溢出检查。 */
-#define configUSE_MALLOC_FAILED_HOOK 1      /* 动态分配失败时调用故障钩子。 */
-#define configUSE_TRACE_FACILITY 1          /* 启用任务及对象调试跟踪字段。 */
-#define configRECORD_STACK_HIGH_ADDRESS 1   /* 记录任务栈高地址，供调试器使用。 */
-#define configGENERATE_RUN_TIME_STATS 1     /* 启用任务运行时间统计。 */
+#define configUSE_MUTEXES 1               /* 启用带优先级继承的互斥量。 */
+#define configUSE_RECURSIVE_MUTEXES 0     /* 关闭递归互斥量。 */
+#define configUSE_COUNTING_SEMAPHORES 1   /* 启用计数信号量。 */
+#define configQUEUE_REGISTRY_SIZE 8       /* 调试注册表最多保存 8 个内核对象。 */
+#define configUSE_TIMERS 1                /* 启用软件定时器服务。 */
+#define configTIMER_TASK_PRIORITY 1U      /* 定时器服务任务优先级为 1。 */
+#define configTIMER_QUEUE_LENGTH 8U       /* 定时器命令队列最多保存 8 条命令。 */
+#define configTIMER_TASK_STACK_DEPTH 256U /* 定时器任务栈为 256 个栈元素，即 1024 字节。 */
+#define configUSE_NEWLIB_REENTRANT 0      /* 不为每个任务单独分配 Newlib 重入结构。 */
+#define configUSE_IDLE_HOOK 0             /* 关闭用户空闲任务钩子。 */
+#define configUSE_TICK_HOOK 0             /* 关闭用户 tick 中断钩子。 */
+#define configCHECK_FOR_STACK_OVERFLOW 2  /* 启用二级任务栈溢出检查。 */
+#define configUSE_MALLOC_FAILED_HOOK 1    /* 动态分配失败时调用故障钩子。 */
+#define configUSE_TRACE_FACILITY 1        /* 启用任务及对象调试跟踪字段。 */
+#define configRECORD_STACK_HIGH_ADDRESS 1 /* 记录任务栈高地址，供调试器使用。 */
+#define configGENERATE_RUN_TIME_STATS 1   /* 启用任务运行时间统计。 */
 #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() FreeRTOS_RunTimeStats_Init() /* 初始化 DWT 运行时间测量累加器。 */
 #define portGET_RUN_TIME_COUNTER_VALUE() FreeRTOS_RunTimeStats_Counter()      /* 读取运行时间统计值，单位 us。 */
 #define configCHECK_HANDLER_INSTALLATION 1                                    /* 检查 SVC 与 PendSV 向量安装。 */
@@ -74,6 +74,7 @@
 #define xPortSysTickHandler SysTick_Handler /* 内核节拍函数映射至 SysTick 向量。 */
 
 #ifndef __ASSEMBLER__
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -100,6 +101,7 @@ uint32_t FreeRTOS_RunTimeStats_Counter(void);
  *  @note   任务、启动或中断上下文均可进入；关闭中断并保留文件和行号供调试，不打印、不分配内存。
  */
 void FreeRTOS_AssertFailed(const char *file, unsigned long line);
+
 #ifdef __cplusplus
 }
 #endif

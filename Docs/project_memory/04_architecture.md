@@ -73,3 +73,10 @@ S3 首连修正：BSP 新增 IsTerminalOpen 状态查询，底层使用 DTR 或�
 S4 最终资源：Debug Flash 82596 B、RAM 30960 B；Release Flash 42156 B、RAM 30912 B。三轮短时实板检查完成。上文 USB 54764/26824/27904 B 是 Shell/日志接入前的历史基线，当前实测见 11_shell_log_validation.md。
 
 当前追加资源修正：startup 动态创建，移除 2152 B 永久静态存储；Debug Flash 82812 B / RAM 28808 B，Release Flash 42256 B / RAM 28760 B。USB、LED 和日志锁保持静态，16 KB RTOS 堆未改。新版未烧录，前述三轮为改动前实板结果。
+
+
+## FOC 阶段 1 提交状态
+
+独立 FOC 算法、BSP 硬件绑定和关闭输出的采样诊断；尚不开放带电运行命令。
+
+本提交为按功能依赖整理的源码快照。实板历史记录按各阶段文档阅读；提交前另行构建 Debug/Release，不将历史测试冒充中间快照再次实板验收。

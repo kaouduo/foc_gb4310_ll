@@ -17,6 +17,7 @@
 
 #include "FreeRTOS.h"
 #include "dwt.h"
+#include "pwm_output_stm32.h"
 #include "task.h"
 
 static StaticTask_t idleTaskControl;
@@ -51,6 +52,7 @@ void vApplicationGetIdleTaskMemory(StaticTask_t **control, StackType_t **stack, 
 void FreeRTOS_AssertFailed(const char *file, unsigned long line)
 {
     __disable_irq();
+    PWM_Output_EmergencyOff();
     freertosAssertFile = file;
     freertosAssertLine = line;
     while (1) {
@@ -113,7 +115,10 @@ uint32_t FreeRTOS_RunTimeStats_Counter(void)
  *  @return 不返回，进入断言停机并保留现场。
  *  @note   由 pvPortMalloc 失败路径调用；不递归分配、不打印、不阻塞，延续工程现有断言处理策略。
  */
-void vApplicationMallocFailedHook(void) { FreeRTOS_AssertFailed(__FILE__, __LINE__); }
+void vApplicationMallocFailedHook(void)
+{
+    FreeRTOS_AssertFailed(__FILE__, __LINE__);
+}
 
 static StaticTask_t timerTaskControl;
 static StackType_t timerTaskStack[configTIMER_TASK_STACK_DEPTH];

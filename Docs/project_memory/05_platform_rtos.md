@@ -87,3 +87,10 @@ main 在时钟/DWT 就绪后绑定输出/时间回调，以 App_LogPlatform 注�
 按用户要求，一次性 startup 改为 xTaskCreate，移除原 2048 B 静态栈和 104 B 静态控制块；保持栈深 512 个 StackType_t。创建失败记录 STARTUP|INTERNAL 故障、SYS_ERROR_IO 并断言停机，不启动调度器。初始化结束仍 vTaskDelete(NULL)，由空闲任务稍后释放动态栈和控制块回到 heap_4，并非自删除语句返回时立即释放。
 
 16 KB RTOS 堆大小未改，USB/LED 与日志锁继续静态分配。Debug RAM 28808 B（87.92%），Release 28760 B（87.77%），各减少 2152 B；动态 startup 在运行期间消耗既有 RTOS 堆，删除后可复用。先前三轮 startup 静态栈水位属于历史实现，新版尚未烧录/实测动态堆回收。
+
+
+## FOC 阶段 1 提交状态
+
+独立 FOC 算法、BSP 硬件绑定和关闭输出的采样诊断；尚不开放带电运行命令。
+
+本提交为按功能依赖整理的源码快照。实板历史记录按各阶段文档阅读；提交前另行构建 Debug/Release，不将历史测试冒充中间快照再次实板验收。
